@@ -1,0 +1,4328 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#3B1E54">
+<title>English Explorer — Apprendre l'anglais en explorant</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<!-- ============================================================
+     ENGLISH EXPLORER v2.1
+     Jeu éducatif 3D (vue première personne) pour enfant de 7 ans.
+     Fichier unique : tout est ici (interface, données, 3D, voix).
+     Moteur 3D : Babylon.js (chargé depuis un CDN).
+     ============================================================ -->
+
+<style>
+/* ===========================================================
+   1. PALETTE ET BASES
+   =========================================================== */
+:root{
+  --prune:#3B1E54;        /* encre principale */
+  --prune-clair:#5B3A78;
+  --soleil:#FFC93C;       /* jaune soleil */
+  --menthe:#7BE0AD;
+  --framboise:#FF5D73;
+  --orange:#FF9F45;
+  --ciel:#8ED6FF;
+  --rouge:#E8252A;        /* couleur de surlignage des objets (demande parent) */
+  --surface:#FFFFFF;
+  --surface-2:#FFF6E3;
+  --texte:#3B1E54;
+  --ombre:0 6px 0 rgba(59,30,84,.25);
+  --rayon:22px;
+}
+/* Mode sombre : les surfaces neutres passent en prune profond */
+@media (prefers-color-scheme: dark){
+  :root{ --surface:#2A1440; --surface-2:#3B1E54; --texte:#FFF6E3; }
+}
+:root[data-theme="dark"]{ --surface:#2A1440; --surface-2:#3B1E54; --texte:#FFF6E3; }
+:root[data-theme="light"]{ --surface:#FFFFFF; --surface-2:#FFF6E3; --texte:#3B1E54; }
+
+*{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html,body{
+  margin:0; padding:0; height:100%; overflow:hidden;
+  overscroll-behavior:none;
+  font-family:'Fredoka',system-ui,-apple-system,'Segoe UI',sans-serif;
+  color:var(--texte);
+  background:#1B0E28;
+  user-select:none; -webkit-user-select:none;
+}
+canvas{ display:block; width:100%; height:100%; outline:none; touch-action:none; }
+
+/* ===========================================================
+   2. BOUTONS « JOUET » (contours épais, ombre pleine)
+   =========================================================== */
+.btn{
+  font-family:inherit; font-weight:700; font-size:20px;
+  border:4px solid var(--prune); border-radius:var(--rayon);
+  background:var(--soleil); color:var(--prune);
+  padding:14px 24px; min-height:56px; cursor:pointer;
+  box-shadow:0 5px 0 var(--prune); transition:transform .08s, box-shadow .08s;
+  touch-action:manipulation; display:inline-flex; align-items:center; gap:10px;
+  justify-content:center;
+}
+.btn:active{ transform:translateY(4px); box-shadow:0 1px 0 var(--prune); }
+.btn.gros{ font-size:28px; min-height:72px; padding:18px 36px; }
+.btn.menthe{ background:var(--menthe); }
+.btn.framboise{ background:var(--framboise); color:#fff; }
+.btn.ciel{ background:var(--ciel); }
+.btn.blanc{ background:var(--surface); color:var(--texte); }
+.btn:disabled{ opacity:.45; cursor:default; }
+@media (min-width:900px){ .btn{ min-height:64px; } }
+
+/* ===========================================================
+   3. STRUCTURE DES ÉCRANS
+   =========================================================== */
+.ecran{
+  position:fixed; inset:0; z-index:40;
+  display:none; flex-direction:column; align-items:center; justify-content:center;
+  padding:calc(16px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right))
+          calc(16px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));
+  overflow:auto;
+}
+.ecran.actif{ display:flex; }
+
+/* ---- Écran titre ---- */
+#ecran-titre{
+  background:linear-gradient(#8ED6FF 0%, #BFE9FF 45%, #FFE9A8 100%);
+  gap:10px; text-align:center;
+}
+#paysage-titre{ width:min(760px,96vw); max-height:34vh; }
+.titre-mot{ display:flex; gap:6px; flex-wrap:wrap; justify-content:center; }
+.titre-mot span{
+  display:inline-block; font-size:clamp(28px,8vw,56px); font-weight:700; color:#fff;
+  background:var(--framboise); border:4px solid var(--prune); border-radius:14px;
+  padding:2px 12px; box-shadow:0 5px 0 var(--prune); transform:rotate(-3deg);
+}
+.titre-mot span:nth-child(even){ background:var(--orange); transform:rotate(3deg); }
+.titre-mot span:nth-child(3n){ background:var(--menthe); color:var(--prune); }
+#sous-titre{ font-size:clamp(15px,4vw,22px); font-weight:600; color:var(--prune); margin:0; }
+/* Sur un écran étroit, les 7 lettres doivent tenir sur une seule ligne */
+@media (max-width:460px){
+  .titre-mot{ gap:3px; }
+  .titre-mot span{ font-size:30px; padding:2px 6px; border-width:3px; }
+}
+@media (max-width:360px){
+  .titre-mot span{ font-size:25px; padding:1px 5px; }
+}
+#credit-mealua{
+  margin-top:auto; padding-top:14px;
+  font-size:16px; font-weight:600; color:var(--prune); opacity:.85;
+  letter-spacing:.5px;
+}
+#credit-mealua b{ color:var(--framboise); }
+
+/* ---- Carte des lieux ---- */
+#ecran-carte{ background:linear-gradient(#3B1E54,#6B3E8F); color:#FFF6E3; gap:14px; }
+#ecran-carte h2{ margin:4px 0; font-size:clamp(22px,6vw,34px); }
+#grille-lieux{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+  gap:14px; width:min(820px,96vw); }
+.medaillon{
+  background:var(--surface); border:5px solid var(--prune); border-radius:26px;
+  padding:10px; text-align:center; cursor:pointer; position:relative;
+  box-shadow:0 6px 0 rgba(0,0,0,.35); color:var(--texte);
+}
+.medaillon svg{ width:100%; height:92px; border-radius:18px; display:block; }
+.medaillon h3{ margin:8px 0 2px; font-size:19px; }
+.medaillon .fr{ font-size:13px; opacity:.7; margin:0; }
+.medaillon .notes{ font-size:17px; margin-top:6px; min-height:22px; }
+.medaillon.verrou{ filter:grayscale(.8); opacity:.75; cursor:not-allowed; }
+.medaillon.verrou::after{
+  content:"🔒"; position:absolute; inset:0; display:flex; align-items:center;
+  justify-content:center; font-size:46px; text-shadow:0 3px 6px rgba(0,0,0,.4);
+}
+.medaillon.suivant{ animation:pulse 1.6s ease-in-out infinite; }
+@keyframes pulse{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.045); } }
+@media (max-width:520px){
+  #grille-lieux{ grid-template-columns:1fr; }
+  .medaillon{ display:grid; grid-template-columns:110px 1fr; align-items:center;
+    gap:12px; text-align:left; }
+  .medaillon svg{ height:70px; }
+  .medaillon.verrou::after{ font-size:34px; }
+}
+
+/* ===========================================================
+   4. INTERFACE EN JEU
+   =========================================================== */
+#jeu{ position:fixed; inset:0; z-index:10; display:none; }
+#jeu.actif{ display:block; }
+
+#barre{
+  position:absolute; top:0; left:0; right:0; z-index:12;
+  display:flex; align-items:center; gap:8px;
+  padding:calc(8px + env(safe-area-inset-top)) 12px 8px;
+  background:linear-gradient(rgba(59,30,84,.85),rgba(59,30,84,0));
+  color:#FFF6E3; pointer-events:none;
+}
+#barre > *{ pointer-events:auto; }
+#nom-zone{ font-weight:700; font-size:clamp(15px,4.2vw,22px); }
+#compteur{
+  background:var(--soleil); color:var(--prune); border:3px solid var(--prune);
+  border-radius:16px; padding:3px 10px; font-weight:700; font-size:15px;
+  white-space:nowrap;
+}
+@media (max-width:420px){
+  #compteur{ font-size:13px; padding:2px 8px; }
+  #nom-zone{ font-size:15px; }
+}
+.icone-btn{
+  width:48px; height:48px; min-height:48px; padding:0; font-size:22px;
+  border-radius:16px; border:3px solid var(--prune); background:var(--surface);
+  color:var(--texte); box-shadow:0 4px 0 var(--prune); cursor:pointer;
+  touch-action:manipulation;
+}
+#barre .espace{ flex:1; }
+
+/* ---- Bulle de la mascotte Hoot ---- */
+#hoot{
+  position:absolute; z-index:12; left:12px; bottom:calc(150px + env(safe-area-inset-bottom));
+  display:flex; align-items:flex-end; gap:8px; max-width:min(420px,78vw);
+  opacity:0; transform:translateY(12px); transition:.25s; pointer-events:none;
+}
+#hoot.visible{ opacity:1; transform:none; }
+#hoot svg{ width:66px; height:66px; flex:none; filter:drop-shadow(0 4px 0 rgba(0,0,0,.25)); }
+#hoot-bulle{
+  background:var(--surface); color:var(--texte); border:4px solid var(--prune);
+  border-radius:20px 20px 20px 4px; padding:10px 14px; font-weight:600; font-size:16px;
+  box-shadow:0 5px 0 rgba(0,0,0,.25);
+}
+#hoot.parle svg{ animation:hochement .5s ease-in-out infinite; }
+@keyframes hochement{ 0%,100%{ transform:rotate(-4deg); } 50%{ transform:rotate(4deg); } }
+
+/* ---- Carte du mot découvert ---- */
+#carte-mot{
+  position:absolute; z-index:14; top:50%; left:50%; transform:translate(-50%,-50%) scale(.8);
+  width:min(330px,86vw); background:var(--surface); border:5px solid var(--prune);
+  border-radius:28px; padding:16px; text-align:center; box-shadow:0 10px 0 rgba(0,0,0,.3);
+  opacity:0; pointer-events:none; transition:.2s;
+}
+#carte-mot.visible{ opacity:1; transform:translate(-50%,-50%) scale(1); pointer-events:auto; }
+#carte-mot .vignette{ font-size:66px; line-height:1; }
+#carte-mot .en{ font-size:36px; font-weight:700; margin:6px 0 0; color:var(--framboise); }
+#carte-mot .phonetique{ font-size:15px; opacity:.6; margin:2px 0; }
+#carte-mot .fr{ font-size:21px; font-weight:600; margin:4px 0 10px; }
+#carte-mot .actions{ display:flex; gap:8px; justify-content:center; }
+
+/* ---- Gros bouton du défi ---- */
+#btn-defi{
+  position:absolute; z-index:13; right:16px;
+  bottom:calc(26px + env(safe-area-inset-bottom));
+  display:none; animation:pulse 1.5s infinite;
+}
+#btn-defi.visible{ display:inline-flex; }
+
+/* ---- Joystick virtuel ---- */
+#joystick{
+  position:absolute; z-index:13; width:132px; height:132px; display:none;
+  bottom:calc(22px + env(safe-area-inset-bottom)); left:calc(18px + env(safe-area-inset-left));
+  border-radius:50%; background:rgba(255,255,255,.22);
+  border:4px solid rgba(59,30,84,.5); touch-action:none;
+}
+#joystick.visible{ display:block; }
+#joystick.droite{ left:auto; right:calc(18px + env(safe-area-inset-right)); }
+#joystick-pouce{
+  position:absolute; width:62px; height:62px; left:31px; top:31px; border-radius:50%;
+  background:var(--soleil); border:4px solid var(--prune); box-shadow:0 4px 0 rgba(0,0,0,.3);
+}
+#joystick::after{
+  content:"⬆"; position:absolute; top:4px; left:0; right:0; text-align:center;
+  font-size:16px; color:rgba(59,30,84,.5);
+}
+
+/* ===========================================================
+   5. PANNEAUX (défi, phrases, résultat, parent, aide)
+   =========================================================== */
+.panneau{
+  position:fixed; inset:0; z-index:50; display:none;
+  align-items:center; justify-content:center;
+  background:rgba(27,14,40,.72); backdrop-filter:blur(3px);
+  padding:calc(12px + env(safe-area-inset-top)) 12px calc(12px + env(safe-area-inset-bottom));
+}
+.panneau.actif{ display:flex; }
+.boite{
+  background:var(--surface); color:var(--texte); border:5px solid var(--prune);
+  border-radius:30px; padding:18px; width:min(560px,94vw); max-height:94vh; overflow:auto;
+  box-shadow:0 12px 0 rgba(0,0,0,.35); text-align:center;
+}
+.boite h2{ margin:0 0 10px; font-size:clamp(20px,5.5vw,28px); }
+.boite p{ font-size:16px; line-height:1.45; }
+
+/* Défi : mots */
+#defi-vignette{ font-size:clamp(70px,20vw,120px); line-height:1; }
+#defi-coeurs{ font-size:24px; letter-spacing:4px; }
+#defi-ecoute{ min-height:26px; font-weight:600; font-size:16px; }
+#micro{
+  width:116px; height:116px; min-height:0; border-radius:50%; font-size:52px; padding:0;
+  background:var(--framboise); color:#fff; border:5px solid var(--prune);
+  box-shadow:0 6px 0 var(--prune);
+}
+#micro.ecoute{ animation:battement .9s ease-in-out infinite; background:var(--menthe); }
+@keyframes battement{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.12); } }
+.rangee{ display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:10px; }
+
+/* Défi : phrases (étiquettes de mots) */
+#phrase-mots{ display:flex; gap:7px; justify-content:center; flex-wrap:wrap; margin:10px 0; }
+.etiq{
+  background:var(--surface-2); border:3px solid var(--prune); border-radius:14px;
+  padding:5px 11px; font-size:clamp(17px,5vw,25px); font-weight:700;
+}
+.etiq.cle{ background:var(--rouge); color:#fff; }       /* mot clé : surligné en rouge */
+.etiq.ok{ background:var(--menthe); color:var(--prune); border-color:#1F7A4D; }
+#phrase-fr{ font-size:16px; opacity:.75; font-weight:600; }
+
+/* Résultat */
+#etoiles{ font-size:clamp(46px,14vw,78px); letter-spacing:6px; }
+#bulles-phrases{ font-size:26px; letter-spacing:3px; min-height:30px; }
+#liste-revoir{ font-size:16px; text-align:left; display:inline-block; margin:6px auto; }
+
+/* Espace parent */
+.reglage{
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  padding:9px 0; border-bottom:2px dashed rgba(59,30,84,.22); text-align:left;
+}
+.reglage > span{ font-size:15px; font-weight:600; }
+.reglage select, .reglage input[type=range]{
+  font-family:inherit; font-size:15px; padding:6px; border-radius:12px;
+  border:3px solid var(--prune); background:var(--surface-2); color:var(--texte);
+}
+.reglage input[type=range]{ padding:0; width:132px; }
+.note{ font-size:13px; opacity:.7; text-align:left; line-height:1.4; }
+
+/* Chargement */
+#chargement{
+  position:fixed; inset:0; z-index:60; background:#3B1E54; color:#FFF6E3;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px;
+}
+#chargement.cache{ display:none; }
+#barre-progres{ width:min(320px,70vw); height:20px; background:rgba(255,255,255,.2);
+  border:3px solid #FFF6E3; border-radius:12px; overflow:hidden; }
+#barre-progres div{ height:100%; width:0%; background:var(--soleil); transition:width .2s; }
+#texte-chargement{ font-weight:600; }
+
+/* Paysage sur petit écran : on compacte tout */
+@media (orientation:landscape) and (max-height:520px){
+  #paysage-titre{ max-height:40vh; }
+  .titre-mot span{ font-size:clamp(20px,5vh,34px); }
+  #credit-mealua{ padding-top:6px; font-size:14px; }
+  .boite{ padding:12px; width:min(680px,96vw); }
+  #micro{ width:86px; height:86px; font-size:38px; }
+  #defi-vignette{ font-size:clamp(46px,16vh,70px); }
+  #etoiles{ font-size:clamp(34px,12vh,56px); }
+  #joystick{ width:106px; height:106px; }
+  #joystick-pouce{ width:50px; height:50px; left:25px; top:25px; }
+  #hoot{ bottom:calc(126px + env(safe-area-inset-bottom)); }
+  #hoot svg{ width:48px; height:48px; }
+}
+</style>
+</head>
+<body>
+
+<!-- =========================== CHARGEMENT =========================== -->
+<div id="chargement">
+  <div style="font-size:56px">🦉</div>
+  <div id="texte-chargement">Préparation du monde…</div>
+  <div id="barre-progres"><div></div></div>
+</div>
+
+<!-- =========================== ÉCRAN TITRE =========================== -->
+<div id="ecran-titre" class="ecran">
+  <!-- Paysage illustré : les 4 lieux reliés par une route -->
+  <svg id="paysage-titre" viewBox="0 0 760 300" aria-label="Les quatre lieux du jeu">
+    <defs>
+      <linearGradient id="g-ciel" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#7CC9F7"/><stop offset="1" stop-color="#DFF3FF"/>
+      </linearGradient>
+      <linearGradient id="g-herbe" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#8FD98A"/><stop offset="1" stop-color="#4FA85C"/>
+      </linearGradient>
+    </defs>
+    <rect width="760" height="300" rx="24" fill="url(#g-ciel)"/>
+    <circle cx="664" cy="56" r="30" fill="#FFC93C" stroke="#3B1E54" stroke-width="4"/>
+    <g fill="#fff" opacity=".9">
+      <ellipse cx="150" cy="56" rx="44" ry="20"/><ellipse cx="186" cy="48" rx="30" ry="22"/>
+      <ellipse cx="520" cy="40" rx="36" ry="16"/><ellipse cx="548" cy="34" rx="24" ry="18"/>
+    </g>
+    <path d="M0 150 q90 -34 190 -8 t190 -6 190 10 190 -6 V300 H0Z" fill="#B7E0F2" opacity=".55"/>
+    <rect y="170" width="760" height="130" fill="url(#g-herbe)"/>
+    <path d="M-10 262 C150 240 210 300 370 268 C520 238 600 290 770 258" stroke="#C9A36A"
+          stroke-width="26" fill="none" stroke-linecap="round"/>
+    <path d="M-10 262 C150 240 210 300 370 268 C520 238 600 290 770 258" stroke="#fff"
+          stroke-width="3" stroke-dasharray="14 18" fill="none" opacity=".8"/>
+    <!-- maison -->
+    <g stroke="#3B1E54" stroke-width="4">
+      <rect x="54" y="176" width="94" height="66" fill="#FFE6C7"/>
+      <path d="M44 178 L101 136 L158 178Z" fill="#E4624B"/>
+      <rect x="74" y="200" width="26" height="26" fill="#8ED6FF"/>
+      <rect x="112" y="204" width="24" height="38" fill="#B5733F"/>
+    </g>
+    <!-- jardin -->
+    <g stroke="#3B1E54" stroke-width="4">
+      <rect x="252" y="196" width="10" height="46" fill="#8C5A2B"/>
+      <circle cx="257" cy="184" r="34" fill="#54B265"/>
+      <circle cx="300" cy="232" r="9" fill="#FF5D73"/><path d="M300 241v12" fill="none"/>
+      <circle cx="222" cy="228" r="8" fill="#FFC93C"/><path d="M222 236v10" fill="none"/>
+    </g>
+    <!-- rue -->
+    <g stroke="#3B1E54" stroke-width="4">
+      <rect x="400" y="150" width="70" height="94" fill="#E8E2F2"/>
+      <rect x="412" y="164" width="18" height="18" fill="#8ED6FF"/>
+      <rect x="440" y="164" width="18" height="18" fill="#8ED6FF"/>
+      <rect x="412" y="196" width="18" height="18" fill="#8ED6FF"/>
+      <rect x="440" y="196" width="18" height="18" fill="#8ED6FF"/>
+      <rect x="486" y="206" width="66" height="34" rx="8" fill="#FFC93C"/>
+      <circle cx="502" cy="244" r="9" fill="#3B1E54"/><circle cx="538" cy="244" r="9" fill="#3B1E54"/>
+    </g>
+    <!-- parc -->
+    <g stroke="#3B1E54" stroke-width="4">
+      <path d="M640 236 L684 196 L690 202 L648 242Z" fill="#FF9F45"/>
+      <path d="M684 196 v-14" fill="none"/>
+      <ellipse cx="704" cy="248" rx="44" ry="16" fill="#8ED6FF"/>
+      <path d="M598 200 l18 -26 l18 26 l-18 10Z" fill="#7BE0AD"/>
+      <path d="M616 210 q10 20 -6 30" fill="none"/>
+    </g>
+  </svg>
+
+  <div class="titre-mot" aria-label="English Explorer">
+    <span>E</span><span>N</span><span>G</span><span>L</span><span>I</span><span>S</span><span>H</span>
+  </div>
+  <p id="sous-titre">🦉 Explore, écoute, répète&nbsp;! Apprends l'anglais en te promenant.</p>
+  <div class="rangee">
+    <button class="btn gros menthe" id="btn-jouer">▶️ Jouer</button>
+    <button class="btn blanc" id="btn-plein-ecran" style="display:none">⛶ Plein écran</button>
+    <button class="btn blanc" id="btn-parent-titre">⚙️ Parents</button>
+  </div>
+  <!-- Le prénom n'est pas écrit en dur : il est passé dans l'adresse du jeu
+       (…/index.html?pour=Méalua), pour ne pas l'exposer sur une page publique. -->
+  <div id="credit-mealua">created with <b>❤️</b></div>
+</div>
+
+<!-- =========================== CARTE DES LIEUX =========================== -->
+<div id="ecran-carte" class="ecran">
+  <h2>🗺️ Où veux-tu aller&nbsp;?</h2>
+  <div id="grille-lieux"></div>
+  <div class="rangee">
+    <button class="btn blanc" id="btn-retour-titre">🏠 Accueil</button>
+    <button class="btn blanc" id="btn-parent-carte">⚙️ Parents</button>
+  </div>
+  <p id="resume-progres" style="font-size:15px;opacity:.85;margin:4px 0 0"></p>
+</div>
+
+<!-- =========================== JEU 3D =========================== -->
+<div id="jeu">
+  <canvas id="vue3d" touch-action="none"></canvas>
+
+  <div id="barre">
+    <button class="icone-btn" id="btn-carte" title="Carte des lieux">🗺️</button>
+    <span id="nom-zone">Bedroom</span>
+    <span id="compteur">🔍 0 / 4</span>
+    <span class="espace"></span>
+    <button class="icone-btn" id="btn-aide" title="Aide">❓</button>
+    <button class="icone-btn" id="btn-parent-jeu" title="Parents">⚙️</button>
+  </div>
+
+  <div id="hoot">
+    <!-- Mascotte Hoot : chouette originale en SVG -->
+    <svg viewBox="0 0 100 100" aria-label="Hoot la chouette">
+      <ellipse cx="50" cy="60" rx="33" ry="35" fill="#9B6BC9" stroke="#3B1E54" stroke-width="5"/>
+      <ellipse cx="50" cy="70" rx="20" ry="22" fill="#FFE6C7" stroke="#3B1E54" stroke-width="4"/>
+      <path d="M22 34 l6 -22 l16 14Z" fill="#9B6BC9" stroke="#3B1E54" stroke-width="5"/>
+      <path d="M78 34 l-6 -22 l-16 14Z" fill="#9B6BC9" stroke="#3B1E54" stroke-width="5"/>
+      <circle cx="37" cy="44" r="13" fill="#fff" stroke="#3B1E54" stroke-width="4"/>
+      <circle cx="63" cy="44" r="13" fill="#fff" stroke="#3B1E54" stroke-width="4"/>
+      <circle cx="39" cy="45" r="5" fill="#3B1E54"/><circle cx="61" cy="45" r="5" fill="#3B1E54"/>
+      <path d="M44 56 l6 8 l6 -8Z" fill="#FFC93C" stroke="#3B1E54" stroke-width="3"/>
+      <path d="M34 92 l-8 6 M66 92 l8 6" stroke="#FFC93C" stroke-width="5" stroke-linecap="round"/>
+    </svg>
+    <div id="hoot-bulle">Bonjour&nbsp;! Touche les objets qui brillent 🔴</div>
+  </div>
+
+  <div id="carte-mot">
+    <div class="vignette">🧸</div>
+    <p class="en">teddy bear</p>
+    <p class="phonetique"></p>
+    <p class="fr">l'ours en peluche</p>
+    <div class="actions">
+      <button class="btn ciel" id="btn-reecouter-mot">🔊 Encore</button>
+      <button class="btn blanc" id="btn-fermer-mot">✅ OK</button>
+    </div>
+  </div>
+
+  <button class="btn gros framboise" id="btn-defi">🎤 Le défi&nbsp;!</button>
+
+  <div id="joystick"><div id="joystick-pouce"></div></div>
+</div>
+
+<!-- =========================== PANNEAU DÉFI (MOTS) =========================== -->
+<div id="panneau-defi" class="panneau">
+  <div class="boite">
+    <h2 id="defi-titre">Dis le mot&nbsp;! 🎤</h2>
+    <div id="defi-vignette">🛏️</div>
+    <div id="defi-coeurs">❤️❤️❤️</div>
+    <p id="defi-consigne" style="font-weight:600;margin:6px 0">Qu'est-ce que c'est&nbsp;?</p>
+    <button id="micro" class="btn">🎤</button>
+    <p id="defi-ecoute"></p>
+    <div class="rangee">
+      <button class="btn ciel" id="btn-defi-reecouter">🔊 Réécouter</button>
+      <button class="btn blanc" id="btn-defi-quitter">✖️ Plus tard</button>
+    </div>
+    <div class="rangee" id="validation-adulte" style="display:none">
+      <button class="btn menthe" id="btn-adulte-ok">✅ C'est juste</button>
+      <button class="btn framboise" id="btn-adulte-non">🔁 Encore</button>
+    </div>
+  </div>
+</div>
+
+<!-- =========================== PANNEAU PHRASES BONUS =========================== -->
+<div id="panneau-phrase" class="panneau">
+  <div class="boite">
+    <h2>💬 Répète la phrase&nbsp;!</h2>
+    <div id="phrase-mots"></div>
+    <p id="phrase-fr"></p>
+    <div id="phrase-coeurs" style="font-size:24px;letter-spacing:4px">❤️❤️❤️</div>
+    <button id="micro-phrase" class="btn" style="width:116px;height:116px;border-radius:50%;
+      font-size:52px;padding:0;background:var(--framboise);color:#fff;box-shadow:0 6px 0 var(--prune)">🎤</button>
+    <p id="phrase-ecoute" style="min-height:26px;font-weight:600"></p>
+    <div class="rangee">
+      <button class="btn ciel" id="btn-phrase-reecouter">🔊 Réécouter</button>
+      <button class="btn blanc" id="btn-phrase-passer">⏭️ Passer les phrases</button>
+    </div>
+    <div class="rangee" id="validation-adulte-phrase" style="display:none">
+      <button class="btn menthe" id="btn-adulte-phrase-ok">✅ C'est juste</button>
+      <button class="btn framboise" id="btn-adulte-phrase-non">🔁 Encore</button>
+    </div>
+  </div>
+</div>
+
+<!-- =========================== PANNEAU RÉSULTAT =========================== -->
+<div id="panneau-resultat" class="panneau">
+  <div class="boite">
+    <h2 id="resultat-titre">Bravo&nbsp;!</h2>
+    <div id="etoiles">⭐⭐⭐</div>
+    <div id="bulles-phrases"></div>
+    <p id="resultat-message"></p>
+    <div id="liste-revoir"></div>
+    <div class="rangee">
+      <button class="btn menthe gros" id="btn-continuer">➡️ Continuer</button>
+      <button class="btn blanc" id="btn-resultat-carte">🗺️ Carte</button>
+    </div>
+  </div>
+</div>
+
+<!-- =========================== PANNEAU AIDE =========================== -->
+<div id="panneau-aide" class="panneau">
+  <div class="boite">
+    <h2>❓ Comment jouer</h2>
+    <div id="aide-contenu" style="text-align:left;font-size:16px;line-height:1.6"></div>
+    <div class="rangee"><button class="btn menthe" id="btn-fermer-aide">👍 Compris</button></div>
+  </div>
+</div>
+
+<!-- =========================== ESPACE PARENT =========================== -->
+<div id="panneau-parent" class="panneau">
+  <div class="boite" id="boite-parent">
+    <h2>⚙️ Espace parent</h2>
+    <div id="parent-verrou">
+      <p id="parent-question" style="font-size:22px;font-weight:700"></p>
+      <input id="parent-reponse" type="number" inputmode="numeric"
+        style="font-family:inherit;font-size:24px;width:120px;text-align:center;padding:8px;
+               border:4px solid var(--prune);border-radius:16px;background:var(--surface-2);
+               color:var(--texte)">
+      <div class="rangee">
+        <button class="btn menthe" id="btn-parent-valider">Entrer</button>
+        <button class="btn blanc" id="btn-parent-annuler">Annuler</button>
+      </div>
+    </div>
+    <div id="parent-contenu" style="display:none"></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/babylonjs@7.54.3/babylon.js"></script>
+<script>
+/* ===================================================================
+   ENGLISH EXPLORER — code du jeu
+   Tout est commenté en français pour qu'un parent puisse s'y retrouver.
+   Sommaire :
+     A. Données   : vocabulaire, phrases, niveaux  (= l'ancien levels.js)
+     B. Réglages  : sauvegarde, qualité, préférences
+     C. Voix      : prononciation anglaise + traduction orale française
+     D. Micro     : reconnaissance des mots et des phrases
+     E. Textures  : générées par le code (aucun fichier à télécharger)
+     F. Décor 3D  : constructeurs d'objets et de lieux
+     G. Contrôles : clavier, souris, joystick tactile
+     H. Jeu       : exploration, défi, phrases, score, portes
+     I. Interface : écrans, menus, espace parent
+   =================================================================== */
+"use strict";
+
+/* ===================================================================
+   A. DONNÉES — TOUT LE VOCABULAIRE ET TOUTES LES PHRASES
+   -------------------------------------------------------------------
+   Pour AJOUTER UN MOT : copiez une ligne de `mots` et changez
+     en    : le mot anglais
+     fr    : la traduction française (dite à voix haute à l'enfant)
+     emo   : un emoji qui sert de vignette
+     model : le nom du constructeur 3D (voir section F) ; si le nom
+             est inconnu, une jolie caisse colorée est utilisée.
+     pos   : [x, y, z] la position dans la pièce
+     accept: (optionnel) autres prononciations acceptées au micro
+   Pour AJOUTER UNE PHRASE : copiez une ligne de `phrases`
+     en / fr / key  (key = le mot du vocabulaire qui doit être entendu)
+   Les objets de `bonus` sont des objets EN OPTION : ils se découvrent
+   et se répètent pour le plaisir, mais ne bloquent jamais la porte.
+   =================================================================== */
+const ZONES = [
+
+/* ---------------------------------------------------------------- */
+{ id:"bedroom", lieu:"house", nom:"The Bedroom", nomFr:"La chambre", emo:"🛏️",
+  salle:{ l:9, p:9, h:2.9, sol:"parquet", mur:"papierEtoile" },
+  mots:[
+    { en:"bed",        fr:"le lit",            emo:"🛏️", model:"bed",     pos:[-2.6,0,-2.2] },
+    { en:"pillow",     fr:"l'oreiller",        emo:"🛌", model:"pillow",  pos:[-2.6,0.62,-3.6] },
+    { en:"teddy bear", fr:"l'ours en peluche", emo:"🧸", model:"teddy",   pos:[1.4,0,-3.2], accept:["teddy","bear","teddybear"] },
+    { en:"window",     fr:"la fenêtre",        emo:"🪟", model:"window",  pos:[-4.4,1.5,-1], rotY:Math.PI/2 }
+  ],
+  bonus:[
+    { en:"desk",     fr:"le bureau",      emo:"🪑", model:"desk",     pos:[3.2,0,1.6] },
+    { en:"globe",    fr:"le globe",       emo:"🌍", model:"globe",    pos:[3.2,0.78,1.6] },
+    { en:"toy box",  fr:"la boîte à jouets", emo:"🧰", model:"toybox", pos:[-3.6,0,2.6], accept:["toybox","box"] },
+    { en:"slippers", fr:"les chaussons",  emo:"🥿", model:"slippers", pos:[-0.4,0,-0.6], accept:["slipper"] }
+  ],
+  phrases:[
+    { en:"I love my teddy bear.",  fr:"J'aime mon ours en peluche.", key:"teddy bear" },
+    { en:"The pillow is on the bed.", fr:"L'oreiller est sur le lit.", key:"pillow" },
+    { en:"Open the window, please.", fr:"Ouvre la fenêtre, s'il te plaît.", key:"window" },
+    { en:"My bed is big.",          fr:"Mon lit est grand.",          key:"bed" },
+    { en:"I sleep in my bed.",      fr:"Je dors dans mon lit.",       key:"bed" },
+    { en:"The teddy bear is soft.", fr:"L'ours en peluche est doux.", key:"teddy bear" },
+    { en:"Look at the window.",     fr:"Regarde la fenêtre.",         key:"window" }
+  ]},
+
+/* ---------------------------------------------------------------- */
+{ id:"bathroom", lieu:"house", nom:"The Bathroom", nomFr:"La salle de bain", emo:"🛁",
+  salle:{ l:8, p:8, h:2.9, sol:"carrelage", mur:"carreauMetro" },
+  mots:[
+    { en:"bath",       fr:"la baignoire",   emo:"🛁", model:"bath",       pos:[-2.2,0,-2.4], accept:["bathtub","bat"] },
+    { en:"toothbrush", fr:"la brosse à dents", emo:"🪥", model:"toothbrush", pos:[2.5,0.92,-3.2], accept:["tooth brush","toothbrush"] },
+    { en:"soap",       fr:"le savon",       emo:"🧼", model:"soap",       pos:[1.7,0.92,-3.2] },
+    { en:"towel",      fr:"la serviette",   emo:"🧺", model:"towel",      pos:[3.82,1.3,0.4], rotY:-Math.PI/2, accept:["towl","tower"] }
+  ],
+  bonus:[
+    { en:"mirror",  fr:"le miroir",     emo:"🪞", model:"mirror",  pos:[2.1,1.75,-3.86] },
+    { en:"comb",    fr:"le peigne",     emo:"💈", model:"comb",    pos:[1.1,0.92,-3.1], accept:["come"] },
+    { en:"sink",    fr:"le lavabo",     emo:"🚰", model:"sink",    pos:[2.1,0,-3.2], accept:["think"] },
+    { en:"shampoo", fr:"le shampoing",  emo:"🧴", model:"shampoo", pos:[-2.2,0.55,-1.1] }
+  ],
+  phrases:[
+    { en:"I take a bath.",         fr:"Je prends un bain.",             key:"bath" },
+    { en:"This is my toothbrush.", fr:"Voici ma brosse à dents.",       key:"toothbrush" },
+    { en:"The towel is yellow.",   fr:"La serviette est jaune.",        key:"towel" },
+    { en:"The soap is small.",     fr:"Le savon est petit.",            key:"soap" },
+    { en:"I wash my hands.",       fr:"Je me lave les mains.",          key:"wash" },
+    { en:"Give me the towel.",     fr:"Donne-moi la serviette.",        key:"towel" },
+    { en:"My toothbrush is blue.", fr:"Ma brosse à dents est bleue.",   key:"toothbrush" }
+  ]},
+
+/* ---------------------------------------------------------------- */
+{ id:"kitchen", lieu:"house", nom:"The Kitchen", nomFr:"La cuisine", emo:"🍎",
+  salle:{ l:9, p:9, h:2.9, sol:"damier", mur:"creditCuisine" },
+  mots:[
+    { en:"table",  fr:"la table",        emo:"🪑", model:"table",  pos:[0,0,0.4] },
+    { en:"chair",  fr:"la chaise",       emo:"💺", model:"chair",  pos:[1.5,0,1.5] },
+    { en:"fridge", fr:"le réfrigérateur",emo:"🧊", model:"fridge", pos:[-3.4,0,-2.6] },
+    { en:"cup",    fr:"la tasse",        emo:"☕", model:"cup",    pos:[-0.5,0.78,0.4] },
+    { en:"apple",  fr:"la pomme",        emo:"🍎", model:"apple",  pos:[0.5,0.8,0.1] }
+  ],
+  bonus:[
+    { en:"banana", fr:"la banane",   emo:"🍌", model:"banana", pos:[0.9,0.79,0.8] },
+    { en:"spoon",  fr:"la cuillère", emo:"🥄", model:"spoon",  pos:[-1.2,0.76,-0.2], accept:["spoons"] },
+    { en:"plate",  fr:"l'assiette",  emo:"🍽️", model:"plate",  pos:[-0.2,0.76,1.1] },
+    { en:"bread",  fr:"le pain",     emo:"🍞", model:"bread",  pos:[2.9,1.05,-3.5], accept:["red","brad"] }
+  ],
+  phrases:[
+    { en:"I eat a red apple.",     fr:"Je mange une pomme rouge.",  key:"apple" },
+    { en:"Sit on the chair.",      fr:"Assieds-toi sur la chaise.", key:"chair" },
+    { en:"The cup is on the table.",fr:"La tasse est sur la table.", key:"cup" },
+    { en:"The fridge is cold.",    fr:"Le réfrigérateur est froid.",key:"fridge" },
+    { en:"I like the apple.",      fr:"J'aime la pomme.",           key:"apple" },
+    { en:"The table is big.",      fr:"La table est grande.",       key:"table" },
+    { en:"The chair is small.",    fr:"La chaise est petite.",      key:"chair" }
+  ]},
+
+/* ---------------------------------------------------------------- */
+{ id:"living", lieu:"house", nom:"The Living Room", nomFr:"Le salon", emo:"📺",
+  salle:{ l:10, p:9, h:2.9, sol:"parquetFonce", mur:"lambris" },
+  mots:[
+    { en:"sofa",  fr:"le canapé",  emo:"🛋️", model:"sofa",  pos:[-0.4,0,2.4], accept:["couch","sofas"] },
+    { en:"TV",    fr:"la télévision", emo:"📺", model:"tv",  pos:[0,1.1,-4.1], accept:["tv","tee vee","teevee","t v","television"] },
+    { en:"lamp",  fr:"la lampe",   emo:"💡", model:"lamp",  pos:[3.3,0,2.6] },
+    { en:"clock", fr:"l'horloge",  emo:"🕐", model:"clock", pos:[-4.86,2,0.2], rotY:Math.PI/2 },
+    { en:"book",  fr:"le livre",   emo:"📕", model:"book",  pos:[0.6,0.48,0.3], accept:["books"] }
+  ],
+  bonus:[
+    { en:"plant",   fr:"la plante",  emo:"🪴", model:"plant",   pos:[4,0,-2.6] },
+    { en:"cushion", fr:"le coussin", emo:"🟨", model:"cushion", pos:[-1.6,0.62,2.2], accept:["cushions"] },
+    { en:"rug",     fr:"le tapis",   emo:"🟫", model:"rug",     pos:[0.2,0.015,0.4], accept:["rugs"] },
+    { en:"picture", fr:"le tableau", emo:"🖼️", model:"picture", pos:[3,1.9,-4.38] }
+  ],
+  phrases:[
+    { en:"I read a book.",   fr:"Je lis un livre.",         key:"book" },
+    { en:"I watch TV.",      fr:"Je regarde la télé.",      key:"TV" },
+    { en:"I sit on the sofa.",fr:"Je m'assieds sur le canapé.", key:"sofa" },
+    { en:"The lamp is on.",  fr:"La lampe est allumée.",    key:"lamp" },
+    { en:"The clock is round.",fr:"L'horloge est ronde.",   key:"clock" },
+    { en:"My book is new.",  fr:"Mon livre est neuf.",      key:"book" },
+    { en:"The sofa is soft.",fr:"Le canapé est doux.",      key:"sofa" }
+  ]},
+
+/* ---------------------------------------------------------------- */
+{ id:"garden", lieu:"garden", nom:"The Garden", nomFr:"Le jardin", emo:"🌳",
+  exterieur:{ taille:28, sol:"herbe", ciel:"jour", depart:[0,10,Math.PI] },
+  mots:[
+    { en:"tree",   fr:"l'arbre",   emo:"🌳", model:"tree",   pos:[-6,0,-6], accept:["trees","three"] },
+    { en:"flower", fr:"la fleur",  emo:"🌸", model:"flower", pos:[4.5,0,-3], accept:["flowers"] },
+    { en:"grass",  fr:"l'herbe",   emo:"🌿", model:"grassTuft", pos:[-2,0,4] },
+    { en:"bird",   fr:"l'oiseau",  emo:"🐦", model:"bird",   pos:[-5.2,1.9,-4.6], accept:["birds"] },
+    { en:"dog",    fr:"le chien",  emo:"🐶", model:"dog",    pos:[2.4,0,2.6], accept:["dogs"] },
+    { en:"cat",    fr:"le chat",   emo:"🐱", model:"cat",    pos:[-4.6,0,2.2], accept:["cats"] },
+    { en:"ball",   fr:"le ballon", emo:"⚽", model:"ball",   pos:[0.6,0,3.4], accept:["balls","bowl"] },
+    { en:"swing",  fr:"la balançoire", emo:"🛝", model:"swing", pos:[6.5,0,3.5], accept:["swings"] }
+  ],
+  bonus:[
+    { en:"fence",        fr:"la clôture",      emo:"🚧", model:"fencePost", pos:[-9.5,0,6] },
+    { en:"snail",        fr:"l'escargot",      emo:"🐌", model:"snail",     pos:[3.2,0,5.4] },
+    { en:"watering can", fr:"l'arrosoir",      emo:"🪣", model:"wateringCan", pos:[-7.5,0,4.2], accept:["watering","can"] },
+    { en:"mushroom",     fr:"le champignon",   emo:"🍄", model:"mushroom",  pos:[-7,0,-2.5] }
+  ],
+  phrases:[
+    { en:"The dog has a ball.",  fr:"Le chien a un ballon.",   key:"ball" },
+    { en:"The bird can fly.",    fr:"L'oiseau peut voler.",    key:"bird" },
+    { en:"I like the swing.",    fr:"J'aime la balançoire.",   key:"swing" },
+    { en:"The cat likes the grass.", fr:"Le chat aime l'herbe.", key:"grass" },
+    { en:"I see a bird.",        fr:"Je vois un oiseau.",      key:"bird" },
+    { en:"The flower is red.",   fr:"La fleur est rouge.",     key:"flower" },
+    { en:"The tree is tall.",    fr:"L'arbre est grand.",      key:"tree" }
+  ]},
+
+/* ---------------------------------------------------------------- */
+{ id:"street", lieu:"street", nom:"The Street", nomFr:"La rue", emo:"🚦",
+  exterieur:{ taille:34, sol:"bitume", ciel:"jour", depart:[0,11.4,Math.PI] },
+  mots:[
+    { en:"car",   fr:"la voiture",  emo:"🚗", model:"car",   pos:[-5,0,-1.5], accept:["cars"] },
+    { en:"bus",   fr:"le bus",      emo:"🚌", model:"bus",   pos:[6,0,-1.5], accept:["buses","bust"] },
+    { en:"bike",  fr:"le vélo",     emo:"🚲", model:"bike",  pos:[-1,0,4.6], accept:["bikes","bicycle"] },
+    { en:"shop",  fr:"le magasin",  emo:"🏪", model:"shop",  pos:[-7,0,9], accept:["shops","chop"] },
+    { en:"traffic light", fr:"le feu tricolore", emo:"🚦", model:"trafficLight", pos:[3.2,0,5.2], accept:["traffic","light","traffic lights"] },
+    { en:"door",  fr:"la porte",    emo:"🚪", model:"doorStreet", pos:[2,0,9.4], accept:["doors"] },
+    { en:"bench", fr:"le banc",     emo:"🪑", model:"bench", pos:[-3.6,0,6.4], accept:["benches","bent"] },
+    { en:"truck", fr:"le camion",   emo:"🚚", model:"truck", pos:[1,0,-5.5], accept:["trucks","track"] }
+  ],
+  bonus:[
+    { en:"mailbox",    fr:"la boîte aux lettres", emo:"📮", model:"mailbox",   pos:[6.4,0,6.2], accept:["mail box","postbox"] },
+    { en:"street lamp",fr:"le lampadaire",        emo:"🔆", model:"streetLamp",pos:[-6.4,0,5.4], accept:["lamp post","streetlamp","street light"] },
+    { en:"bin",        fr:"la poubelle",          emo:"🗑️", model:"bin",       pos:[-5.2,0,6.6], accept:["been","bean"] },
+    { en:"sign",       fr:"le panneau",           emo:"🪧", model:"sign",      pos:[8.4,0,5.6], accept:["signs"] }
+  ],
+  phrases:[
+    { en:"Stop at the traffic light!", fr:"Arrête-toi au feu !",      key:"traffic light" },
+    { en:"I ride my bike.",            fr:"Je fais du vélo.",         key:"bike" },
+    { en:"The bus is big and yellow.", fr:"Le bus est grand et jaune.", key:"bus" },
+    { en:"The car is fast.",           fr:"La voiture est rapide.",   key:"car" },
+    { en:"The shop is open.",          fr:"Le magasin est ouvert.",   key:"shop" },
+    { en:"Open the door, please.",     fr:"Ouvre la porte, s'il te plaît.", key:"door" },
+    { en:"The bench is brown.",        fr:"Le banc est marron.",      key:"bench" }
+  ]},
+
+/* ---------------------------------------------------------------- */
+{ id:"park", lieu:"park", nom:"The Park", nomFr:"Le parc", emo:"🛝",
+  exterieur:{ taille:30, sol:"gravier", ciel:"soir", depart:[4,12,Math.PI] },
+  mots:[
+    { en:"slide",     fr:"le toboggan",   emo:"🛝", model:"slide",     pos:[-5.5,0,-4], accept:["slides"] },
+    { en:"duck",      fr:"le canard",     emo:"🦆", model:"duck",      pos:[5.4,0,4.2], accept:["ducks","dark"] },
+    { en:"pond",      fr:"la mare",       emo:"💧", model:"pond",      pos:[6,0,5], accept:["ponds","pound"] },
+    { en:"kite",      fr:"le cerf-volant",emo:"🪁", model:"kite",      pos:[-2,4.6,-8], accept:["kites","kyte"] },
+    { en:"ice cream", fr:"la glace",      emo:"🍦", model:"iceCream",  pos:[3,0,-2], accept:["icecream","ice","cream"] },
+    { en:"butterfly", fr:"le papillon",   emo:"🦋", model:"butterfly", pos:[-1,1.5,3], accept:["butterflies","butter fly"] },
+    { en:"sun",       fr:"le soleil",     emo:"☀️", model:"sunDisc",   pos:[0,13,-14], accept:["suns","son"] },
+    { en:"balloon",   fr:"le ballon de baudruche", emo:"🎈", model:"balloon", pos:[1.6,0,5.6], accept:["balloons","baloon"] }
+  ],
+  bonus:[
+    { en:"fountain", fr:"la fontaine", emo:"⛲", model:"fountain", pos:[0,0,0] },
+    { en:"frog",     fr:"la grenouille", emo:"🐸", model:"frog",   pos:[7.6,0,2.6], accept:["frogs"] },
+    { en:"bee",      fr:"l'abeille",   emo:"🐝", model:"bee",      pos:[-4,1.2,4.4], accept:["bees","be"] },
+    { en:"umbrella", fr:"le parasol",  emo:"⛱️", model:"umbrella", pos:[-7.5,0,4.5] }
+  ],
+  phrases:[
+    { en:"The duck is in the pond.", fr:"Le canard est dans la mare.", key:"duck" },
+    { en:"I want an ice cream.",     fr:"Je veux une glace.",          key:"ice cream" },
+    { en:"Look at the kite!",        fr:"Regarde le cerf-volant !",    key:"kite" },
+    { en:"The sun is hot.",          fr:"Le soleil est chaud.",        key:"sun" },
+    { en:"I see a butterfly.",       fr:"Je vois un papillon.",        key:"butterfly" },
+    { en:"The balloon is red.",      fr:"Le ballon est rouge.",        key:"balloon" },
+    { en:"I go on the slide.",       fr:"Je vais sur le toboggan.",    key:"slide" }
+  ]}
+];
+
+/* Les 4 grands lieux affichés sur la carte */
+const LIEUX = [
+  { id:"house",  nom:"The House",  fr:"La maison", zones:["bedroom","bathroom","kitchen","living"] },
+  { id:"garden", nom:"The Garden", fr:"Le jardin", zones:["garden"] },
+  { id:"street", nom:"The Street", fr:"La rue",    zones:["street"] },
+  { id:"park",   nom:"The Park",   fr:"Le parc",   zones:["park"] }
+];
+
+const zoneParId = id => ZONES.find(z => z.id === id);
+const indexZone = id => ZONES.findIndex(z => z.id === id);
+
+/* ===================================================================
+   B. SAUVEGARDE ET RÉGLAGES (localStorage, toujours protégé)
+   =================================================================== */
+const CLE = "english-explorer-v2";
+const REGLAGES_DEFAUT = {
+  volumeVoix:1, volumeEffets:.6, vitesseVoix:.8, accent:"en-US",
+  hootVoix:true, traductionOrale:true,
+  seuil:70, nbPhrases:"auto", bonusActifs:true,
+  validationAdulte:false, qualite:"auto", joystickDroite:false
+};
+
+const Progres = {
+  donnees:{ reglages:{...REGLAGES_DEFAUT}, zones:{}, debloques:["bedroom"], motsARevoir:[], phrasesOk:0 },
+
+  charger(){
+    try{
+      const brut = localStorage.getItem(CLE) || localStorage.getItem("english-explorer-v1");
+      if(brut){
+        const d = JSON.parse(brut);
+        this.donnees = Object.assign(this.donnees, d);
+        this.donnees.reglages = Object.assign({...REGLAGES_DEFAUT}, d.reglages || {});
+        if(!Array.isArray(this.donnees.debloques) || !this.donnees.debloques.length)
+          this.donnees.debloques = ["bedroom"];
+      }
+    }catch(e){ console.warn("Sauvegarde illisible, on repart de zéro.", e); }
+  },
+  sauver(){
+    try{ localStorage.setItem(CLE, JSON.stringify(this.donnees)); }
+    catch(e){ /* navigation privée : on continue sans sauvegarder */ }
+  },
+  get r(){ return this.donnees.reglages; },
+  zone(id){
+    if(!this.donnees.zones[id]) this.donnees.zones[id] = { etoiles:0, bulles:0, decouverts:[], fini:false };
+    return this.donnees.zones[id];
+  },
+  estDebloque(id){ return this.donnees.debloques.includes(id); },
+  debloquer(id){
+    if(id && !this.donnees.debloques.includes(id)){ this.donnees.debloques.push(id); }
+    this.sauver();
+  },
+  ajouterARevoir(mot){
+    if(!this.donnees.motsARevoir.includes(mot)) this.donnees.motsARevoir.push(mot);
+  },
+  retirerARevoir(mot){
+    this.donnees.motsARevoir = this.donnees.motsARevoir.filter(m => m !== mot);
+  },
+  totalEtoiles(){ return Object.values(this.donnees.zones).reduce((s,z)=>s+(z.etoiles||0),0); },
+  totalBulles(){ return this.donnees.phrasesOk || 0; },
+  tout(){ ZONES.forEach(z => { if(!this.donnees.debloques.includes(z.id))
+             this.donnees.debloques.push(z.id); }); this.sauver(); },
+  remettreAZero(){
+    this.donnees = { reglages:{...this.donnees.reglages}, zones:{}, debloques:["bedroom"],
+                     motsARevoir:[], phrasesOk:0 };
+    this.sauver();
+  }
+};
+Progres.charger();
+
+/* ===================================================================
+   C. LA VOIX — prononciation anglaise + traduction orale française
+   -------------------------------------------------------------------
+   Par défaut on utilise la voix du navigateur (speechSynthesis).
+   Si un fichier audio/<mot>.mp3 existe à côté du jeu, il est joué
+   à la place (meilleure qualité). La traduction française est dite
+   juste après le mot anglais, pour que l'enfant comprenne le sens.
+   =================================================================== */
+const Voix = {
+  pret:false, voixEn:null, voixFr:null, fileAttente:[], enCours:false,
+
+  init(){
+    if(!("speechSynthesis" in window)) return;
+    const choisir = () => {
+      const toutes = speechSynthesis.getVoices();
+      if(!toutes.length) return;
+      const accent = Progres.r.accent;
+      const prefere = n => toutes.find(v => v.name.toLowerCase().includes(n));
+      this.voixEn =
+        toutes.find(v => v.lang === accent && v.localService) ||
+        toutes.find(v => v.lang === accent) ||
+        prefere("samantha") || prefere("google us english") ||
+        toutes.find(v => v.lang && v.lang.startsWith("en")) || null;
+      this.voixFr =
+        toutes.find(v => v.lang && v.lang.startsWith("fr") && v.localService) ||
+        toutes.find(v => v.lang && v.lang.startsWith("fr")) || null;
+      this.pret = true;
+    };
+    choisir();
+    speechSynthesis.onvoiceschanged = choisir;
+  },
+
+  /* Débloque l'audio au premier appui (obligatoire sur iPhone) */
+  debloquer(){
+    try{
+      const u = new SpeechSynthesisUtterance(" ");
+      u.volume = 0; speechSynthesis.speak(u);
+    }catch(e){}
+    this.init();
+  },
+
+  arreter(){
+    try{ speechSynthesis.cancel(); }catch(e){}
+    this.fileAttente = []; this.enCours = false;
+  },
+
+  /* Dit un texte. langue = "en" ou "fr". Renvoie une promesse. */
+  dire(texte, langue = "en", options = {}){
+    return new Promise(resolve => {
+      if(!("speechSynthesis" in window) || !texte){ resolve(); return; }
+      try{
+        const u = new SpeechSynthesisUtterance(texte);
+        if(langue === "fr"){
+          u.voice = this.voixFr; u.lang = this.voixFr ? this.voixFr.lang : "fr-FR";
+          u.rate = options.rate || 1;
+        }else{
+          u.voice = this.voixEn; u.lang = this.voixEn ? this.voixEn.lang : Progres.r.accent;
+          u.rate = options.rate || Progres.r.vitesseVoix;
+        }
+        u.volume = options.volume != null ? options.volume : Progres.r.volumeVoix;
+        u.pitch = options.pitch || 1.05;
+        u.onend = () => resolve();
+        u.onerror = () => resolve();
+        speechSynthesis.speak(u);
+        /* filet de sécurité : si onend ne se déclenche pas */
+        setTimeout(resolve, 1200 + texte.length * 90);
+      }catch(e){ resolve(); }
+    });
+  },
+
+  /* Joue un mp3 s'il existe (audio/<nom>.mp3), sinon renvoie false */
+  mp3Absents:{},
+  async essayerMp3(nom){
+    const fichier = "audio/" + nom.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"") + ".mp3";
+    if(this.mp3Absents[fichier]) return false;      /* déjà testé : pas de fichier */
+    return new Promise(resolve => {
+      const a = new Audio(fichier);
+      a.volume = Progres.r.volumeVoix;
+      a.onended = () => resolve(true);
+      a.onerror  = () => { this.mp3Absents[fichier] = true; resolve(false); };
+      a.play().catch(() => { this.mp3Absents[fichier] = true; resolve(false); });
+    });
+  },
+
+  /* Dit le mot anglais LENTEMENT, puis sa traduction française */
+  async direMot(mot, avecTraduction = true){
+    this.arreter();
+    const okMp3 = await this.essayerMp3(mot.en);
+    if(!okMp3) await this.dire(mot.en, "en", { rate: Progres.r.vitesseVoix });
+    if(avecTraduction && Progres.r.traductionOrale){
+      await pause(180);
+      await this.dire(mot.fr, "fr", { rate:1 });
+    }
+  },
+
+  /* Dit la phrase anglaise, puis sa traduction française */
+  async direPhrase(phrase, avecTraduction = true){
+    this.arreter();
+    const okMp3 = await this.essayerMp3(phrase.en);
+    if(!okMp3) await this.dire(phrase.en, "en", { rate: Math.min(.9, Progres.r.vitesseVoix + .05) });
+    if(avecTraduction && Progres.r.traductionOrale){
+      await pause(200);
+      await this.dire(phrase.fr, "fr", { rate:1 });
+    }
+  },
+
+  /* Hoot parle en français (messages courts) */
+  async direHoot(texte){
+    if(!Progres.r.hootVoix) return;
+    await this.dire(texte, "fr", { rate:1, pitch:1.25, volume: Progres.r.volumeVoix * .9 });
+  }
+};
+const pause = ms => new Promise(r => setTimeout(r, ms));
+
+/* ===================================================================
+   D. LE MICRO — reconnaissance bienveillante des mots et des phrases
+   -------------------------------------------------------------------
+   Une seule fonction publique : Micro.ecouter(cible)
+     cible = un mot   { en, fr, accept } → on vérifie le mot
+     cible = une phrase { en, fr, key }  → on vérifie le mot clé
+                                           + 60 % des mots
+   Renvoie { success, heard, hits }.
+   Cette couche isole le reste du jeu : on pourra brancher plus tard
+   Azure Pronunciation Assessment sans toucher au jeu.
+   =================================================================== */
+const MOTS_OUTILS = ["a","an","the","it","is","are","my","your","i","to","at","on","in","of","and","this","that","please","am"];
+
+function normaliser(t){
+  return (t||"").toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+    .replace(/['’]/g," ")
+    .replace(/[^a-z0-9 ]/g," ")
+    .replace(/\s+/g," ").trim();
+}
+function levenshtein(a,b){
+  const m=a.length, n=b.length;
+  if(!m) return n; if(!n) return m;
+  let prev=Array.from({length:n+1},(_,j)=>j), cur=new Array(n+1);
+  for(let i=1;i<=m;i++){
+    cur[0]=i;
+    for(let j=1;j<=n;j++){
+      cur[j]=Math.min(prev[j]+1, cur[j-1]+1, prev[j-1]+(a[i-1]===b[j-1]?0:1));
+    }
+    [prev,cur]=[cur,prev];
+  }
+  return prev[n];
+}
+/* Deux mots sont « assez proches » ? (tolérance selon la longueur) */
+function motProche(attendu, entendu){
+  attendu = normaliser(attendu); entendu = normaliser(entendu);
+  if(!attendu || !entendu) return false;
+  if(attendu === entendu) return true;
+  /* pluriels */
+  if(attendu + "s" === entendu || entendu + "s" === attendu) return true;
+  if(attendu + "es" === entendu || entendu + "es" === attendu) return true;
+  const tol = attendu.length >= 8 ? 2 : attendu.length >= 4 ? 1 : 0;
+  return levenshtein(attendu, entendu) <= tol;
+}
+/* Le mot (ou groupe de mots) attendu est-il présent dans la phrase entendue ? */
+function contientMot(attendu, entendu, accept = []){
+  const cibles = [attendu, ...(accept||[])].map(normaliser).filter(Boolean);
+  const mots = normaliser(entendu).split(" ").filter(Boolean);
+  const phrase = mots.join(" ");
+  for(const c of cibles){
+    if(!c) continue;
+    if(phrase === c) return true;
+    if(phrase.includes(c)) return true;
+    const morceaux = c.split(" ");
+    if(morceaux.length > 1){
+      /* mot composé : on accepte si le dernier morceau est entendu (ex. « bear » pour « teddy bear ») */
+      if(mots.some(m => motProche(morceaux[morceaux.length-1], m))) return true;
+      if(morceaux.every(mc => mots.some(m => motProche(mc, m)))) return true;
+    }else{
+      if(mots.some(m => motProche(c, m))) return true;
+    }
+  }
+  return false;
+}
+
+const Micro = {
+  dispo: !!(window.SpeechRecognition || window.webkitSpeechRecognition),
+  reco:null, actif:false,
+
+  /* Écoute et compare à la cible. Promesse résolue dans tous les cas. */
+  ecouter(cible, onTexte){
+    const estPhrase = !!cible.key;
+    const duree = estPhrase ? 9000 : 7000;
+
+    return new Promise(resolve => {
+      if(!this.dispo || Progres.r.validationAdulte){
+        resolve({ success:null, heard:"", hits:[] }); return;
+      }
+      const Classe = window.SpeechRecognition || window.webkitSpeechRecognition;
+      let reco;
+      try{ reco = new Classe(); }
+      catch(e){ resolve({ success:null, heard:"", hits:[] }); return; }
+
+      this.reco = reco; this.actif = true;
+      reco.lang = Progres.r.accent;
+      reco.maxAlternatives = 5;
+      reco.interimResults = true;
+      reco.continuous = false;
+
+      let alternatives = [], fini = false;
+      const minuteur = setTimeout(() => { try{ reco.stop(); }catch(e){} }, duree);
+
+      reco.onresult = ev => {
+        for(let i = ev.resultIndex; i < ev.results.length; i++){
+          const res = ev.results[i];
+          for(let j = 0; j < res.length; j++) alternatives.push(res[j].transcript);
+          if(onTexte && res[0]) onTexte(res[0].transcript);
+        }
+      };
+      const terminer = () => {
+        if(fini) return; fini = true;
+        clearTimeout(minuteur); this.actif = false;
+        const entendu = alternatives.join(" | ");
+        const res = estPhrase ? this.jugerPhrase(cible, alternatives)
+                              : this.jugerMot(cible, alternatives);
+        resolve({ ...res, heard: alternatives[0] || "" , brut:entendu });
+      };
+      reco.onend = terminer;
+      reco.onerror = terminer;
+      try{ reco.start(); }
+      catch(e){ terminer(); }
+    });
+  },
+
+  arreter(){ try{ this.reco && this.reco.stop(); }catch(e){} this.actif = false; },
+
+  /* Un mot est réussi si UNE des alternatives colle */
+  jugerMot(mot, alternatives){
+    for(const alt of alternatives){
+      if(contientMot(mot.en, alt, mot.accept)) return { success:true, hits:[mot.en] };
+    }
+    return { success:false, hits:[] };
+  },
+
+  /* Une phrase est réussie si le mot clé est entendu ET 60 % des mots */
+  jugerPhrase(phrase, alternatives){
+    const motsPhrase = normaliser(phrase.en).split(" ").filter(Boolean);
+    const utiles = motsPhrase.filter(m => !MOTS_OUTILS.includes(m));
+    let meilleur = { success:false, hits:[] };
+
+    for(const alt of alternatives){
+      const entendus = normaliser(alt).split(" ").filter(Boolean);
+      const hits = motsPhrase.filter(m => entendus.some(e => motProche(m, e)));
+      const cleOk = contientMot(phrase.key, alt, []);
+      const base = utiles.length ? utiles : motsPhrase;
+      const touchesUtiles = base.filter(m => hits.includes(m)).length;
+      const ratio = touchesUtiles / base.length;
+      const ok = cleOk && ratio >= .6;
+      if(hits.length > meilleur.hits.length || ok){
+        meilleur = { success:ok, hits };
+        if(ok) break;
+      }
+    }
+    return meilleur;
+  }
+};
+
+/* ===================================================================
+   E. TEXTURES GÉNÉRÉES PAR LE CODE
+   -------------------------------------------------------------------
+   Aucun fichier à télécharger : chaque texture est dessinée une fois
+   dans un canvas, puis gardée en mémoire pour tous les lieux.
+   Si vous placez de vraies textures dans un dossier textures/,
+   remplacez simplement `Tex.get(nom)` par une BABYLON.Texture.
+   =================================================================== */
+const Tex = {
+  cache:{}, scene:null, taille:512,
+
+  /* L'atelier est une scène invisible qui n'est jamais détruite :
+     les textures y vivent une fois pour toutes et servent à tous les lieux. */
+  ouvrirAtelier(engine){
+    if(!this.scene) this.scene = new BABYLON.Scene(engine);
+    return this.scene;
+  },
+  init(scene, qualite){
+    this.taille = qualite === "haute" ? 512 : 256;
+  },
+
+  /* Fabrique (ou retrouve) une texture. `dessin` reçoit (ctx, T) */
+  faire(nom, dessin, repeteU = 1, repeteV = 1){
+    const cle = nom + "@" + this.taille;
+    if(this.cache[cle]) return this.cache[cle];
+    const T = this.taille;
+    const dt = new BABYLON.DynamicTexture(nom, { width:T, height:T }, this.scene, true);
+    const ctx = dt.getContext();
+    dessin(ctx, T);
+    dt.update(false);
+    dt.wrapU = dt.wrapV = BABYLON.Texture.WRAP_ADDRESSMODE;
+    dt.uScale = repeteU; dt.vScale = repeteV;
+    dt.anisotropicFilteringLevel = 4;
+    this.cache[cle] = dt;
+    return dt;
+  },
+
+  /* Petites aides de dessin */
+  bruit(ctx,T,n,alpha,taille){
+    for(let i=0;i<n;i++){
+      ctx.fillStyle = `rgba(0,0,0,${Math.random()*alpha})`;
+      ctx.fillRect(Math.random()*T, Math.random()*T, taille, taille);
+    }
+  },
+  grain(ctx,T,n,couleur,alpha){
+    ctx.strokeStyle = couleur; ctx.globalAlpha = alpha;
+    for(let i=0;i<n;i++){
+      const y = Math.random()*T;
+      ctx.beginPath(); ctx.moveTo(0,y);
+      ctx.bezierCurveTo(T/3, y+Math.random()*6-3, 2*T/3, y+Math.random()*6-3, T, y);
+      ctx.lineWidth = Math.random()*1.5+.3; ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  },
+
+  /* --- Le catalogue --- */
+  get(nom){
+    const F = this;
+    switch(nom){
+
+      case "parquet": return F.faire("parquet",(c,T)=>{
+        c.fillStyle="#C99A62"; c.fillRect(0,0,T,T);
+        const hl=T/8;
+        for(let r=0;r<8;r++){
+          const dec=(r%2)*T/4;
+          for(let x=-T/4;x<T;x+=T/4){
+            const t=.86+Math.random()*.22;
+            c.fillStyle=`rgb(${Math.round(201*t)},${Math.round(154*t)},${Math.round(98*t)})`;
+            c.fillRect(x+dec+1, r*hl+1, T/4-2, hl-2);
+          }
+        }
+        F.grain(c,T,90,"#8A5E2B",.18);
+      },6,6);
+
+      case "parquetFonce": return F.faire("parquetFonce",(c,T)=>{
+        c.fillStyle="#8A5C38"; c.fillRect(0,0,T,T);
+        const hl=T/7;
+        for(let r=0;r<7;r++){
+          const dec=(r%2)*T/5;
+          for(let x=-T/5;x<T;x+=T/5){
+            const t=.84+Math.random()*.26;
+            c.fillStyle=`rgb(${Math.round(138*t)},${Math.round(92*t)},${Math.round(56*t)})`;
+            c.fillRect(x+dec+1, r*hl+1, T/5-2, hl-2);
+          }
+        }
+        F.grain(c,T,80,"#5B3A20",.2);
+      },6,6);
+
+      case "carrelage": return F.faire("carrelage",(c,T)=>{
+        c.fillStyle="#DCEAF2"; c.fillRect(0,0,T,T);
+        const n=4, s=T/n;
+        for(let i=0;i<n;i++) for(let j=0;j<n;j++){
+          const t=.95+Math.random()*.1;
+          c.fillStyle=`rgb(${Math.round(214*t)},${Math.round(232*t)},${Math.round(242*t)})`;
+          c.fillRect(i*s+2, j*s+2, s-4, s-4);
+          c.fillStyle="rgba(255,255,255,.5)";
+          c.fillRect(i*s+2, j*s+2, s-4, 3);
+        }
+        c.strokeStyle="#A9BCC8"; c.lineWidth=3;
+        for(let i=0;i<=n;i++){
+          c.beginPath(); c.moveTo(i*s,0); c.lineTo(i*s,T); c.stroke();
+          c.beginPath(); c.moveTo(0,i*s); c.lineTo(T,i*s); c.stroke();
+        }
+      },5,5);
+
+      case "damier": return F.faire("damier",(c,T)=>{
+        const n=4, s=T/n;
+        for(let i=0;i<n;i++) for(let j=0;j<n;j++){
+          c.fillStyle=((i+j)%2) ? "#F6E9D2" : "#C9593F";
+          c.fillRect(i*s,j*s,s,s);
+          c.fillStyle="rgba(0,0,0,.05)"; c.fillRect(i*s,j*s+s-4,s,4);
+        }
+        F.bruit(c,T,500,.05,2);
+      },5,5);
+
+      case "carreauMetro": return F.faire("carreauMetro",(c,T)=>{
+        c.fillStyle="#E7F2F6"; c.fillRect(0,0,T,T);
+        const hl=T/6, lg=T/3;
+        for(let r=0;r<6;r++){
+          const dec=(r%2)*lg/2;
+          for(let x=-lg;x<T;x+=lg){
+            c.fillStyle=`rgb(${245-Math.random()*14|0},${250-Math.random()*12|0},253)`;
+            c.fillRect(x+dec+2, r*hl+2, lg-4, hl-4);
+            c.fillStyle="rgba(255,255,255,.65)";
+            c.fillRect(x+dec+2, r*hl+2, lg-4, 3);
+          }
+        }
+      },4,2.2);
+
+      case "papierEtoile": return F.faire("papierEtoile",(c,T)=>{
+        const g=c.createLinearGradient(0,0,0,T);
+        g.addColorStop(0,"#CFE6FF"); g.addColorStop(1,"#E9F4FF");
+        c.fillStyle=g; c.fillRect(0,0,T,T);
+        c.fillStyle="#FFD86B";
+        for(let i=0;i<26;i++){
+          const x=Math.random()*T, y=Math.random()*T, r=T/70+Math.random()*T/80;
+          c.beginPath();
+          for(let k=0;k<10;k++){
+            const a=Math.PI/5*k - Math.PI/2, rr = k%2 ? r*.45 : r;
+            c[k?"lineTo":"moveTo"](x+Math.cos(a)*rr, y+Math.sin(a)*rr);
+          }
+          c.closePath(); c.fill();
+        }
+        c.strokeStyle="rgba(255,255,255,.5)"; c.lineWidth=2;
+        for(let x=0;x<T;x+=T/8){ c.beginPath(); c.moveTo(x,0); c.lineTo(x,T); c.stroke(); }
+      },3,1.6);
+
+      case "lambris": return F.faire("lambris",(c,T)=>{
+        c.fillStyle="#E8D6BC"; c.fillRect(0,0,T,T);
+        const lg=T/6;
+        for(let x=0;x<T;x+=lg){
+          const t=.93+Math.random()*.12;
+          c.fillStyle=`rgb(${Math.round(232*t)},${Math.round(214*t)},${Math.round(188*t)})`;
+          c.fillRect(x+1,0,lg-2,T);
+          c.fillStyle="rgba(120,80,40,.22)"; c.fillRect(x+lg-3,0,2,T);
+        }
+        c.save(); c.translate(T/2,T/2); c.rotate(Math.PI/2); c.translate(-T/2,-T/2);
+        F.grain(c,T,70,"#A9875C",.16); c.restore();
+      },3,1.5);
+
+      case "creditCuisine": return F.faire("creditCuisine",(c,T)=>{
+        c.fillStyle="#FFF3DC"; c.fillRect(0,0,T,T);
+        c.fillStyle="#F3C7A3"; c.fillRect(0,T*.55,T,T*.2);
+        const n=8,s=T/n;
+        for(let i=0;i<n;i++){
+          c.fillStyle= i%2 ? "#EFAF83" : "#F6D3B2";
+          c.fillRect(i*s, T*.55, s-2, T*.2-2);
+        }
+        F.bruit(c,T,300,.04,2);
+      },3,1.5);
+
+      case "brique": return F.faire("brique",(c,T)=>{
+        c.fillStyle="#9E4A33"; c.fillRect(0,0,T,T);
+        const hl=T/8, lg=T/4;
+        for(let r=0;r<8;r++){
+          const dec=(r%2)*lg/2;
+          for(let x=-lg;x<T;x+=lg){
+            const t=.82+Math.random()*.32;
+            c.fillStyle=`rgb(${Math.round(176*t)},${Math.round(86*t)},${Math.round(62*t)})`;
+            c.fillRect(x+dec+2, r*hl+2, lg-4, hl-4);
+          }
+        }
+        F.bruit(c,T,800,.08,2);
+      },4,4);
+
+      case "bardage": return F.faire("bardage",(c,T)=>{
+        c.fillStyle="#F3EADA"; c.fillRect(0,0,T,T);
+        const hl=T/10;
+        for(let y=0;y<T;y+=hl){
+          const t=.95+Math.random()*.08;
+          c.fillStyle=`rgb(${Math.round(243*t)},${Math.round(234*t)},${Math.round(218*t)})`;
+          c.fillRect(0,y,T,hl-2);
+          c.fillStyle="rgba(90,70,50,.18)"; c.fillRect(0,y+hl-3,T,2);
+        }
+      },4,3);
+
+      case "tuile": return F.faire("tuile",(c,T)=>{
+        c.fillStyle="#B04A3A"; c.fillRect(0,0,T,T);
+        const hl=T/8;
+        for(let r=0;r<8;r++){
+          for(let x=0;x<T;x+=T/10){
+            const t=.85+Math.random()*.25;
+            c.fillStyle=`rgb(${Math.round(185*t)},${Math.round(80*t)},${Math.round(62*t)})`;
+            c.beginPath();
+            c.arc(x+T/20, r*hl+hl, T/22, Math.PI, 0); c.fill();
+          }
+          c.fillStyle="rgba(0,0,0,.14)"; c.fillRect(0,r*hl+hl-2,T,3);
+        }
+      },6,6);
+
+      case "bitume": return F.faire("bitume",(c,T)=>{
+        c.fillStyle="#4C4A52"; c.fillRect(0,0,T,T);
+        F.bruit(c,T,2600,.28,2);
+        for(let i=0;i<500;i++){
+          c.fillStyle=`rgba(255,255,255,${Math.random()*.08})`;
+          c.fillRect(Math.random()*T,Math.random()*T,2,2);
+        }
+      },8,8);
+
+      case "pave": return F.faire("pave",(c,T)=>{
+        c.fillStyle="#9A9099"; c.fillRect(0,0,T,T);
+        const s=T/8;
+        for(let i=0;i<8;i++) for(let j=0;j<8;j++){
+          const t=.82+Math.random()*.34;
+          c.fillStyle=`rgb(${Math.round(166*t)},${Math.round(158*t)},${Math.round(164*t)})`;
+          c.beginPath();
+          c.roundRect ? c.roundRect(i*s+2+((j%2)*s/3), j*s+2, s-5, s-5, 4)
+                      : c.rect(i*s+2, j*s+2, s-5, s-5);
+          c.fill();
+        }
+      },6,6);
+
+      case "herbe": return F.faire("herbe",(c,T)=>{
+        c.fillStyle="#5CA657"; c.fillRect(0,0,T,T);
+        for(let i=0;i<2600;i++){
+          const v=Math.random();
+          c.strokeStyle = v>.6 ? "#75C06A" : v>.3 ? "#4B9450" : "#3E8044";
+          c.lineWidth=1.4;
+          const x=Math.random()*T, y=Math.random()*T, h=3+Math.random()*7;
+          c.beginPath(); c.moveTo(x,y); c.lineTo(x+Math.random()*3-1.5,y-h); c.stroke();
+        }
+        for(let i=0;i<26;i++){
+          c.fillStyle= Math.random()>.5 ? "rgba(255,230,120,.8)" : "rgba(255,255,255,.75)";
+          c.beginPath(); c.arc(Math.random()*T,Math.random()*T,2.4,0,7); c.fill();
+        }
+      },14,14);
+
+      case "gravier": return F.faire("gravier",(c,T)=>{
+        c.fillStyle="#C9B79C"; c.fillRect(0,0,T,T);
+        for(let i=0;i<2200;i++){
+          const t=.75+Math.random()*.4;
+          c.fillStyle=`rgba(${Math.round(190*t)},${Math.round(175*t)},${Math.round(150*t)},.9)`;
+          c.beginPath(); c.arc(Math.random()*T,Math.random()*T,1+Math.random()*2.6,0,7); c.fill();
+        }
+      },12,12);
+
+      case "terre": return F.faire("terre",(c,T)=>{
+        c.fillStyle="#7A5436"; c.fillRect(0,0,T,T);
+        F.bruit(c,T,1800,.22,3);
+      },6,6);
+
+      case "bois": return F.faire("bois",(c,T)=>{
+        c.fillStyle="#B07A47"; c.fillRect(0,0,T,T);
+        F.grain(c,T,150,"#8A5A2F",.3);
+      },2,2);
+
+      case "boisClair": return F.faire("boisClair",(c,T)=>{
+        c.fillStyle="#E3C08C"; c.fillRect(0,0,T,T);
+        F.grain(c,T,130,"#B98F5A",.26);
+      },2,2);
+
+      case "ecorce": return F.faire("ecorce",(c,T)=>{
+        c.fillStyle="#6B4A33"; c.fillRect(0,0,T,T);
+        for(let i=0;i<120;i++){
+          c.strokeStyle=`rgba(0,0,0,${.1+Math.random()*.25})`;
+          c.lineWidth=1+Math.random()*4;
+          const x=Math.random()*T;
+          c.beginPath(); c.moveTo(x,0);
+          c.bezierCurveTo(x+8,T/3,x-8,2*T/3,x+Math.random()*10-5,T); c.stroke();
+        }
+      },2,3);
+
+      case "feuillage": return F.faire("feuillage",(c,T)=>{
+        c.fillStyle="#3F8E47"; c.fillRect(0,0,T,T);
+        for(let i=0;i<900;i++){
+          const v=Math.random();
+          c.fillStyle= v>.65 ? "#62B45C" : v>.3 ? "#357D40" : "#2A6B37";
+          const x=Math.random()*T,y=Math.random()*T;
+          c.beginPath(); c.ellipse(x,y,5+Math.random()*7,3+Math.random()*4,Math.random()*3,0,7); c.fill();
+        }
+      },3,3);
+
+      case "tissu": return F.faire("tissu",(c,T)=>{
+        c.fillStyle="#C7536B"; c.fillRect(0,0,T,T);
+        c.strokeStyle="rgba(255,255,255,.1)"; c.lineWidth=2;
+        for(let i=0;i<T;i+=5){
+          c.beginPath(); c.moveTo(i,0); c.lineTo(i,T); c.stroke();
+          c.beginPath(); c.moveTo(0,i); c.lineTo(T,i); c.stroke();
+        }
+        F.bruit(c,T,900,.07,2);
+      },3,3);
+
+      case "fourrure": return F.faire("fourrure",(c,T)=>{
+        c.fillStyle="#C98A4B"; c.fillRect(0,0,T,T);
+        for(let i=0;i<4000;i++){
+          c.strokeStyle=`rgba(${Math.random()>.5?255:120},${Math.random()>.5?200:90},${Math.random()>.5?150:60},.25)`;
+          c.lineWidth=1;
+          const x=Math.random()*T,y=Math.random()*T,a=Math.random()*7;
+          c.beginPath(); c.moveTo(x,y); c.lineTo(x+Math.cos(a)*5,y+Math.sin(a)*5); c.stroke();
+        }
+      },3,3);
+
+      case "metal": return F.faire("metal",(c,T)=>{
+        const g=c.createLinearGradient(0,0,T,T);
+        g.addColorStop(0,"#C7CBD2"); g.addColorStop(.5,"#EFF2F6"); g.addColorStop(1,"#AEB4BD");
+        c.fillStyle=g; c.fillRect(0,0,T,T);
+        c.strokeStyle="rgba(0,0,0,.05)";
+        for(let i=0;i<T;i+=3){ c.beginPath(); c.moveTo(0,i); c.lineTo(T,i); c.stroke(); }
+      },2,2);
+
+      case "eau": return F.faire("eau",(c,T)=>{
+        const g=c.createLinearGradient(0,0,0,T);
+        g.addColorStop(0,"#2C7FBF"); g.addColorStop(1,"#4FB4DE");
+        c.fillStyle=g; c.fillRect(0,0,T,T);
+        c.strokeStyle="rgba(255,255,255,.3)"; c.lineWidth=3;
+        for(let i=0;i<30;i++){
+          const y=Math.random()*T;
+          c.beginPath(); c.moveTo(0,y);
+          for(let x=0;x<=T;x+=T/8) c.lineTo(x, y+Math.sin(x/22)*5);
+          c.stroke();
+        }
+      },3,3);
+
+      case "vitrine": return F.faire("vitrine",(c,T)=>{
+        const g=c.createLinearGradient(0,0,T,T);
+        g.addColorStop(0,"#BFE6F7"); g.addColorStop(.45,"#EAF8FF");
+        g.addColorStop(.5,"#FFFFFF"); g.addColorStop(1,"#9FD4EC");
+        c.fillStyle=g; c.fillRect(0,0,T,T);
+      },1,1);
+
+      default: return null;
+    }
+  }
+};
+
+/* ===================================================================
+   F. LE MONDE 3D
+   -------------------------------------------------------------------
+   Monde = un sol, des murs ou un ciel, du décor, et les objets
+   du vocabulaire. Chaque objet du vocabulaire est construit par une
+   petite fonction (voir OBJETS), puis rendu cliquable et entouré
+   EN ROUGE tant qu'il n'est pas découvert.
+   =================================================================== */
+const Monde = {
+  engine:null, scene:null, camera:null, soleil:null, ombres:null, pipeline:null,
+  cliquables:[], decor:[], animations:[], qualite:"haute", glow:null,
+
+  /* ---- Création du moteur (une seule fois) ---- */
+  demarrer(canvas){
+    this.engine = new BABYLON.Engine(canvas, true, {
+      preserveDrawingBuffer:false, stencil:true, disableWebGL2Support:false,
+      powerPreference:"high-performance"
+    }, false);
+    this.engine.setHardwareScalingLevel(Qualite.echelle());
+    window.addEventListener("resize", () => {
+      this.engine.resize();
+      this.adapterChampDeVision();
+    });
+    this.engine.runRenderLoop(() => {
+      if(this.scene && this.scene.activeCamera) this.scene.render();
+    });
+    /* Baisse la résolution si ça rame */
+    let bas = 0;
+    setInterval(() => {
+      if(!this.engine) return;
+      const fps = this.engine.getFps();
+      if(fps < 24 && bas < 2){ bas++; this.engine.setHardwareScalingLevel(Qualite.echelle() + bas*.35); }
+    }, 4000);
+  },
+
+  /* Le champ de vision s'adapte à l'écran (pas de « vision par une fente ») */
+  adapterChampDeVision(){
+    if(!this.camera) return;
+    const r = this.engine.getRenderWidth() / Math.max(1, this.engine.getRenderHeight());
+    if(r < 1){ /* portrait : on fixe la largeur de vue */
+      this.camera.fovMode = BABYLON.Camera.FOVMODE_HORIZONTAL_FIXED;
+      this.camera.fov = 1.15;
+    }else{
+      this.camera.fovMode = BABYLON.Camera.FOVMODE_VERTICAL_FIXED;
+      this.camera.fov = r > 1.9 ? .95 : 1.02;
+    }
+  },
+
+  /* ---- Nettoyage avant de construire un nouveau lieu ---- */
+  viderScene(){
+    if(this.pipeline){ this.pipeline.dispose(); this.pipeline = null; }
+    if(this.scene){ this.scene.dispose(); this.scene = null; }
+    this.cliquables = []; this.decor = []; this.animations = [];
+    this.porte = null; this.matCache = {};
+  },
+
+  /* ---- Construit un lieu complet ---- */
+  construire(zone){
+    this.viderScene();
+    this.qualite = Qualite.niveau();
+    const scene = new BABYLON.Scene(this.engine);
+    this.scene = scene;
+    this.matCache = {};
+    Tex.init(scene, this.qualite);
+    scene.imageProcessingConfiguration.toneMappingEnabled = true;
+    scene.imageProcessingConfiguration.toneMappingType =
+      BABYLON.ImageProcessingConfiguration.TONEMAPPING_ACES;
+    scene.imageProcessingConfiguration.contrast = 1.15;
+    scene.imageProcessingConfiguration.exposure = 1.05;
+    scene.collisionsEnabled = true;
+    scene.blockMaterialDirtyMechanism = true;
+
+    const dehors = !!zone.exterieur;
+    scene.clearColor = dehors ? new BABYLON.Color4(.55,.78,.95,1)
+                              : new BABYLON.Color4(.1,.07,.14,1);
+
+    /* --- Caméra première personne : marche lente, pas de saut --- */
+    const cam = new BABYLON.FreeCamera("cam", new BABYLON.Vector3(0,1.25,dehors?8:3), scene);
+    cam.minZ = .15; cam.maxZ = 220;
+    cam.speed = .11;                 /* marche lente */
+    cam.angularSensibility = 2800;   /* regard doux */
+    cam.inertia = .72;
+    cam.applyGravity = false;        /* pas de saut, pas de chute */
+    cam.checkCollisions = true;
+    cam.ellipsoid = new BABYLON.Vector3(.42,.62,.42);
+    cam.ellipsoidOffset = new BABYLON.Vector3(0,.62,0);
+    cam.rotation.y = Math.PI;
+    this.camera = cam;
+    scene.activeCamera = cam;
+    this.engine.resize();            /* le canvas vient d'apparaître : on remesure */
+    this.adapterChampDeVision();
+
+    /* --- Lumières : ambiance douce + soleil chaud --- */
+    const ambiante = new BABYLON.HemisphericLight("amb", new BABYLON.Vector3(0,1,0), scene);
+    ambiante.intensity = dehors ? .72 : .95;
+    ambiante.diffuse = dehors ? new BABYLON.Color3(1,.98,.92) : new BABYLON.Color3(1,.97,.92);
+    ambiante.groundColor = dehors ? new BABYLON.Color3(.42,.46,.36)
+                                  : new BABYLON.Color3(.68,.63,.6);
+
+    const soleil = new BABYLON.DirectionalLight("soleil", new BABYLON.Vector3(-.45,-1,.4), scene);
+    soleil.position = new BABYLON.Vector3(16,24,-14);
+    soleil.intensity = dehors ? 1.5 : 1.1;
+    soleil.diffuse = new BABYLON.Color3(1,.95,.82);
+    this.soleil = soleil;
+
+    /* --- Ombres douces (filtrage PCF) --- */
+    try{
+      const taille = this.qualite === "haute" ? 2048 : 1024;
+      const ombres = new BABYLON.ShadowGenerator(taille, soleil);
+      ombres.usePercentageCloserFiltering = true;
+      ombres.filteringQuality = this.qualite === "haute"
+        ? BABYLON.ShadowGenerator.QUALITY_MEDIUM : BABYLON.ShadowGenerator.QUALITY_LOW;
+      ombres.bias = .012; ombres.normalBias = .02;
+      ombres.darkness = .42;
+      if(this.qualite !== "haute") ombres.getShadowMap().refreshRate =
+        BABYLON.RenderTargetTexture.REFRESHRATE_RENDER_ONEVERYTWOFRAMES;
+      this.ombres = ombres;
+    }catch(e){ this.ombres = null; }
+
+    /* --- Halo lumineux pour les objets mis en valeur --- */
+    try{
+      this.glow = new BABYLON.GlowLayer("glow", scene, { blurKernelSize:24 });
+      this.glow.intensity = .5;
+    }catch(e){ this.glow = null; }
+
+    /* --- Le lieu lui-même --- */
+    if(dehors) this.construireExterieur(zone);
+    else       this.construirePiece(zone);
+
+    /* --- Fusion du décor immobile, par matériau : beaucoup moins
+           d'éléments à dessiner, donc un jeu fluide sur téléphone --- */
+    this.fusionnerDecor();
+
+    /* --- Les objets du vocabulaire + les objets bonus --- */
+    const liste = zone.mots.concat(Progres.r.bonusActifs ? (zone.bonus||[]) : []);
+    liste.forEach((mot, i) => {
+      const estBonus = (zone.bonus||[]).indexOf(mot) >= 0;
+      try{ this.poserObjet(mot, estBonus, zone); }
+      catch(e){ console.warn("Objet non construit :", mot.en, e); }
+    });
+
+    /* --- Post-traitement : ordinateur en qualité haute seulement --- */
+    if(this.qualite === "haute" && !Appareil.tactile){
+      try{
+        const p = new BABYLON.DefaultRenderingPipeline("pipeline", true, scene, [cam]);
+        p.samples = 2; p.fxaaEnabled = true;
+        p.bloomEnabled = true; p.bloomThreshold = .82; p.bloomWeight = .22;
+        p.imageProcessing.vignetteEnabled = true;
+        p.imageProcessing.vignetteWeight = 1.6;
+        p.imageProcessing.vignetteColor = new BABYLON.Color4(0,0,0,0);
+        this.pipeline = p;
+      }catch(e){ /* sans post-traitement, le jeu marche aussi */ }
+    }
+
+    /* --- Animations d'ambiance (eau, animaux, nuages…) --- */
+    let t = 0;
+    scene.onBeforeRenderObservable.add(() => {
+      t += this.engine.getDeltaTime() / 1000;
+      for(const a of this.animations){ try{ a(t); }catch(e){} }
+    });
+
+    /* --- Clic / toucher : interagir avec un objet ou aller au sol --- */
+    scene.onPointerObservable.add(info => {
+      if(info.type !== BABYLON.PointerEventTypes.POINTERTAP) return;
+      const pick = info.pickInfo;
+      if(!pick || !pick.hit) return;
+      let n = pick.pickedMesh;
+      while(n && !n.metadata?.mot) n = n.parent;
+      if(n && n.metadata?.mot){ Jeu.toucherObjet(n.metadata.mot, n); return; }
+      if(pick.pickedMesh && pick.pickedMesh.metadata?.sol && pick.pickedPoint){
+        Controles.allerVers(pick.pickedPoint);
+      }
+    });
+
+    return scene;
+  },
+
+  /* ================= MATÉRIAUX ================= */
+  mat(nom, couleur, texture, opt = {}){
+    /* Mise en cache : un même matériau n'est créé qu'une fois par lieu */
+    const cle = nom + "|" + (couleur||"") + "|" + (texture||"") + "|" + JSON.stringify(opt);
+    if(!this.matCache) this.matCache = {};
+    if(this.matCache[cle]) return this.matCache[cle];
+    const m = new BABYLON.StandardMaterial(nom, this.scene);
+    if(couleur) m.diffuseColor = BABYLON.Color3.FromHexString(couleur);
+    if(texture){
+      const t = Tex.get(texture);
+      if(t){
+        m.diffuseTexture = t;
+      }
+    }
+    m.specularColor = new BABYLON.Color3(opt.brillant||.04, opt.brillant||.04, opt.brillant||.04);
+    if(opt.brillant) m.specularPower = 48;
+    if(opt.emissive) m.emissiveColor = BABYLON.Color3.FromHexString(opt.emissive);
+    if(opt.alpha != null){ m.alpha = opt.alpha; }
+    if(opt.backFace) m.backFaceCulling = false;
+    m.freeze();
+    this.matCache[cle] = m;
+    return m;
+  },
+
+  /* ================= PRIMITIVES PRATIQUES ================= */
+  boite(nom, l, h, p, x, y, z, mat, parent){
+    const m = BABYLON.MeshBuilder.CreateBox(nom, { width:l, height:h, depth:p }, this.scene);
+    m.position.set(x,y,z); if(mat) m.material = mat; if(parent) m.parent = parent;
+    return m;
+  },
+  cyl(nom, d, h, x, y, z, mat, parent, dTop){
+    const m = BABYLON.MeshBuilder.CreateCylinder(nom,
+      { diameter:d, height:h, diameterTop: dTop!=null?dTop:d, tessellation:18 }, this.scene);
+    m.position.set(x,y,z); if(mat) m.material = mat; if(parent) m.parent = parent;
+    return m;
+  },
+  sph(nom, d, x, y, z, mat, parent){
+    const m = BABYLON.MeshBuilder.CreateSphere(nom, { diameter:d, segments:12 }, this.scene);
+    m.position.set(x,y,z); if(mat) m.material = mat; if(parent) m.parent = parent;
+    return m;
+  },
+
+  /* Marque un mesh comme décor : il projette une ombre et ne bouge plus */
+  statique(m, bloque = true, recoit = true){
+    if(!m) return m;
+    if(bloque) m.checkCollisions = true;
+    if(recoit) m.receiveShadows = true;
+    if(this.ombres && m.getTotalVertices && m.getTotalVertices() > 0){
+      try{ this.ombres.addShadowCaster(m, false); }catch(e){}
+    }
+    m.isPickable = false;
+    m.freezeWorldMatrix();
+    this.decor.push(m);
+    return m;
+  },
+  /* Décor sans ombre portée (murs, plafond) pour ne pas assombrir la pièce */
+  statiqueSansOmbre(m, bloque = true){
+    if(!m) return m;
+    if(bloque) m.checkCollisions = true;
+    m.receiveShadows = true;
+    m.isPickable = false;
+    m.freezeWorldMatrix();
+    this.decor.push(m);
+    return m;
+  }
+};
+
+/* Regroupe tout le décor figé en quelques gros morceaux, un par
+   matériau. On passe ainsi de plusieurs centaines d'éléments dessinés
+   à quelques dizaines, sans rien changer à l'apparence. */
+Monde.fusionnerDecor = function(){
+  const groupes = {};
+  for(const m of this.decor){
+    if(!m || m.isDisposed() || !m.material) continue;
+    if(!m.getTotalVertices || m.getTotalVertices() === 0) continue;
+    const cle = m.material.uniqueId + "|" + (m.checkCollisions ? "1" : "0");
+    (groupes[cle] = groupes[cle] || []).push(m);
+  }
+  let avant = 0, apres = 0;
+  for(const cle in groupes){
+    const liste = groupes[cle];
+    avant += liste.length;
+    if(liste.length < 3){ apres += liste.length; continue; }
+    const avecCollision = cle.endsWith("|1");
+    try{
+      const fusion = BABYLON.Mesh.MergeMeshes(liste, true, true, undefined, false, false);
+      if(fusion){
+        fusion.checkCollisions = avecCollision;
+        fusion.receiveShadows = true;
+        fusion.isPickable = false;
+        if(this.ombres){ try{ this.ombres.addShadowCaster(fusion, false); }catch(e){} }
+        fusion.freezeWorldMatrix();
+        apres += 1;
+      }
+    }catch(e){ apres += liste.length; }
+  }
+  this.decor = [];
+};
+
+/* ===================================================================
+   F.2 APPAREIL ET QUALITÉ GRAPHIQUE
+   =================================================================== */
+const Appareil = {
+  tactile: (navigator.maxTouchPoints || 0) > 0 || "ontouchstart" in window,
+  petit: Math.min(window.innerWidth, window.innerHeight) < 500,
+  iOS: /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+       (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1),
+  android: /Android/.test(navigator.userAgent)
+};
+const Qualite = {
+  niveau(){
+    const r = Progres.r.qualite;
+    if(r === "haute") return "haute";
+    if(r === "eco") return "eco";
+    /* Auto : haute sur ordinateur, économie sur téléphone */
+    return Appareil.tactile && Appareil.petit ? "eco" : "haute";
+  },
+  echelle(){
+    if(this.niveau() === "eco") return Math.min(1.5, window.devicePixelRatio > 2 ? 1.4 : 1.15);
+    return Math.min(1.25, 1 / Math.min(1, window.devicePixelRatio / 1.5)) || 1;
+  }
+};
+
+/* ===================================================================
+   F.3 CONSTRUCTION DES LIEUX
+   =================================================================== */
+
+/* ---------- Une pièce de la maison ---------- */
+Monde.construirePiece = function(zone){
+  const S = zone.salle, L = S.l, P = S.p, H = S.h;
+  const matSol  = this.mat("sol", "#FFFFFF", S.sol);
+  const matMur  = this.mat("mur", "#FFFFFF", S.mur);
+  const matPlaf = this.mat("plafond", "#FBF6EE", null, { emissive:"#3A3630" });
+  const matPlinthe = this.mat("plinthe", "#F3ECE0");
+  const matCorniche = this.mat("corniche", "#FFFFFF");
+
+  /* Sol (cliquable : toucher le sol pour s'y rendre) */
+  const sol = BABYLON.MeshBuilder.CreateGround("sol", { width:L, height:P }, this.scene);
+  sol.material = matSol; sol.receiveShadows = true; sol.checkCollisions = true;
+  sol.metadata = { sol:true }; sol.freezeWorldMatrix();
+
+  /* Plafond */
+  const plaf = this.boite("plafond", L, .12, P, 0, H, 0, matPlaf);
+  this.statiqueSansOmbre(plaf);
+
+  /* 4 murs (sans ombre portée, sinon la pièce devient noire) */
+  const murs = [
+    [L,H,.2, 0,H/2,-P/2], [L,H,.2, 0,H/2,P/2],
+    [.2,H,P, -L/2,H/2,0], [.2,H,P, L/2,H/2,0]
+  ];
+  murs.forEach((m,i) => this.statiqueSansOmbre(
+    this.boite("mur"+i, m[0],m[1],m[2], m[3],m[4],m[5], matMur)));
+
+  /* Plinthes + corniches (détail) */
+  [[-P/2,0],[P/2,0]].forEach(([z]) => {
+    this.statiqueSansOmbre(this.boite("pl", L,.14,.08, 0,.07,z<0?-P/2+.14:P/2-.14, matPlinthe), false);
+    this.statiqueSansOmbre(this.boite("co", L,.1,.12, 0,H-.1,z<0?-P/2+.16:P/2-.16, matCorniche), false);
+  });
+  [[-L/2],[L/2]].forEach(([x]) => {
+    this.statiqueSansOmbre(this.boite("pl", .08,.14,P, x<0?-L/2+.14:L/2-.14,.07,0, matPlinthe), false);
+    this.statiqueSansOmbre(this.boite("co", .12,.1,P, x<0?-L/2+.16:L/2-.16,H-.1,0, matCorniche), false);
+  });
+
+  /* Assombrissement en bas des murs (ombre de contact) */
+  const matOmbreBas = this.mat("ombreBas", "#000000", null, { alpha:.1 });
+  [[0,-P/2+.12,L,.5],[0,P/2-.12,L,.5]].forEach(([x,z,l]) => {
+    const q = BABYLON.MeshBuilder.CreatePlane("ob", { width:l, height:.5 }, this.scene);
+    q.position.set(x,.25,z); q.material = matOmbreBas; q.isPickable = false;
+    if(z > 0) q.rotation.y = Math.PI;
+    q.freezeWorldMatrix();
+  });
+
+  /* Lumière de plafond */
+  const matLaiton = this.mat("laiton", "#E8C27A", "metal", { brillant:.5 });
+  const matAbatjour = this.mat("abatjour", "#FFF3D0", null, { emissive:"#4A3A18" });
+  this.statiqueSansOmbre(this.cyl("tige", .05, .5, 0, H-.3, 0, matLaiton), false);
+  const abat = this.cyl("abat", .62, .3, 0, H-.62, 0, matAbatjour, null, .3);
+  abat.isPickable = false; abat.freezeWorldMatrix();
+  const pointLum = new BABYLON.PointLight("plaf", new BABYLON.Vector3(0,H-.7,0), this.scene);
+  pointLum.intensity = .6; pointLum.diffuse = new BABYLON.Color3(1,.93,.78);
+  pointLum.range = 16;
+
+  /* Décor commun : tapis, plantes, tableaux selon la pièce */
+  this.decorPiece(zone, L, P, H);
+
+  /* Porte de sortie au fond, elle s'ouvrira après le défi */
+  this.poserPorte(zone, 0, 0, P/2 - .12, 0);
+
+  /* Position de départ de l'enfant */
+  this.camera.position.set(0, 1.25, P/2 - 1.4);
+  this.camera.rotation.y = Math.PI;
+};
+
+/* ---------- Décor non interactif propre à chaque pièce ---------- */
+Monde.decorPiece = function(zone, L, P, H){
+  const bois = this.mat("d-bois", "#FFFFFF", "bois");
+  const boisC = this.mat("d-boisC", "#FFFFFF", "boisClair");
+  const blanc = this.mat("d-blanc", "#F6F3EC");
+  const metal = this.mat("d-metal", "#FFFFFF", "metal", { brillant:.4 });
+  const tissu = this.mat("d-tissu", "#FFFFFF", "tissu");
+  const vert  = this.mat("d-vert", "#3E8F4E");
+  const terre = this.mat("d-terre", "#8A5A3B");
+
+  const S = this.statique.bind(this);
+
+  if(zone.id === "bedroom"){
+    /* étagère à jouets */
+    S(this.boite("etag", 1.8,.08,.34, -4.3,1.5,-.4, boisC), false);
+    S(this.boite("etag2",1.8,.08,.34, -4.3,1.05,-.4, boisC), false);
+    for(let i=0;i<5;i++){
+      const c = ["#FF5D73","#FFC93C","#7BE0AD","#8ED6FF","#FF9F45"][i];
+      S(this.boite("jouet"+i, .22,.22,.22, -5+ i*.42, 1.65, -.4, this.mat("j"+i, c)), false);
+      S(this.sph("balle"+i, .2, -5+ i*.42, 1.2, -.4, this.mat("b"+i, c)), false);
+    }
+    /* armoire */
+    S(this.boite("armoire", 1.7,2.2,.6, 3.6,1.1,-2.8, bois));
+    S(this.boite("poignee", .06,.3,.06, 3.6,1.2,-2.48, metal), false);
+    /* tapis rond */
+    const tapis = BABYLON.MeshBuilder.CreateDisc("tapis", { radius:1.3, tessellation:28 }, this.scene);
+    tapis.rotation.x = Math.PI/2; tapis.position.set(0,.02,0);
+    tapis.material = this.mat("tapisM", "#F2C6D5"); tapis.isPickable = false;
+    tapis.freezeWorldMatrix();
+  }
+
+  if(zone.id === "bathroom"){
+    /* rideau de douche + colonne */
+    S(this.boite("douche", 1.4,2.2,1.4, -2.6,1.1,2.4, this.mat("dch","#DDEFF6",null,{alpha:.45})), false);
+    S(this.cyl("tringle", .05,1.5, -2.6,2.2,2.4, metal), false);
+    /* toilettes */
+    S(this.boite("wc-res", .5,.8,.25, 3.3,.4,2.9, blanc));
+    S(this.cyl("wc-cuv", .46,.42, 3.3,.21,2.55, blanc));
+    S(this.cyl("wc-abat", .5,.06, 3.3,.45,2.55, blanc), false);
+    /* plante */
+    S(this.cyl("pot", .32,.3, -3.2,.15,3.2, terre));
+    S(this.sph("feuilles", .7, -3.2,.6,3.2, this.mat("fe","#FFFFFF","feuillage")), false);
+  }
+
+  if(zone.id === "kitchen"){
+    /* cuisine équipée : plan de travail, placards, évier, plaques */
+    S(this.boite("meuble", 5,.9,.62, 1.6,.45,-3.6, boisC));
+    S(this.boite("plan", 5.1,.08,.68, 1.6,.94,-3.6, this.mat("plan","#E9E4DB",null,{brillant:.3})));
+    S(this.boite("haut", 4.2,.7,.35, 1.8,2.1,-3.8, blanc), false);
+    S(this.cyl("evier", .5,.12, .4,.95,-3.6, metal), false);
+    S(this.cyl("robinet", .05,.4, .4,1.15,-3.8, metal), false);
+    for(let i=0;i<4;i++)
+      S(this.cyl("plaque", .3,.03, 2.4+(i%2)*.42, .99, -3.75+Math.floor(i/2)*.36, this.mat("pq","#2B2B30")), false);
+    /* suspension au-dessus de la table */
+    S(this.cyl("susp", .4,.22, 0,2.3,.4, this.mat("sp","#FF9F45"), null, .14), false);
+    /* buffet */
+    S(this.boite("buffet", .6,1.1,2, -4.1,.55,1.4, bois));
+  }
+
+  if(zone.id === "living"){
+    /* fauteuil */
+    S(this.boite("fau-a", 1,.45,1, 3.4,.22,1.2, tissu));
+    S(this.boite("fau-d", 1,.6,.18, 3.4,.72,.72, tissu), false);
+    /* buffet + plantes */
+    S(this.boite("buffet", 3,.7,.45, 0,.35,-3.9, bois));
+    S(this.cyl("pot2", .4,.4, -4,.2,2.8, terre));
+    S(this.sph("plante2", .9, -4,.85,2.8, this.mat("fe2","#FFFFFF","feuillage")), false);
+    /* tapis */
+    S(this.boite("tapis", 3.6,.02,2.6, 0,.01,.6, this.mat("tp","#D9C3A5")), false, true);
+  }
+};
+
+/* ---------- Un lieu extérieur (jardin, rue, parc) ---------- */
+Monde.construireExterieur = function(zone){
+  const T = zone.exterieur.taille;
+  const matSol = this.mat("sol", "#FFFFFF", zone.exterieur.sol);
+
+  const sol = BABYLON.MeshBuilder.CreateGround("sol", { width:T, height:T, subdivisions:2 }, this.scene);
+  sol.material = matSol; sol.receiveShadows = true; sol.checkCollisions = true;
+  sol.metadata = { sol:true }; sol.freezeWorldMatrix();
+
+  /* --- Ciel : dôme en dégradé + nuages qui dérivent --- */
+  const soir = zone.exterieur.ciel === "soir";
+  const dome = BABYLON.MeshBuilder.CreateSphere("ciel", { diameter:200, segments:16 }, this.scene);
+  const matCiel = new BABYLON.StandardMaterial("ciel", this.scene);
+  const texCiel = Tex.faire("ciel-"+(soir?"soir":"jour"), (c,S) => {
+    const g = c.createLinearGradient(0,0,0,S);
+    if(soir){ g.addColorStop(0,"#5A84B8"); g.addColorStop(.55,"#9DB6DC");
+              g.addColorStop(.8,"#F6B072"); g.addColorStop(1,"#FFD9A0"); }
+    else    { g.addColorStop(0,"#56A3E0"); g.addColorStop(.5,"#8FCCF4");
+              g.addColorStop(.85,"#CFEAFB"); g.addColorStop(1,"#EAF6FF"); }
+    c.fillStyle = g; c.fillRect(0,0,S,S);
+  });
+  matCiel.diffuseTexture = texCiel;
+  matCiel.emissiveTexture = texCiel;
+  matCiel.diffuseColor = new BABYLON.Color3(0,0,0);
+  matCiel.specularColor = new BABYLON.Color3(0,0,0);
+  matCiel.backFaceCulling = false;
+  matCiel.disableLighting = true;
+  dome.material = matCiel; dome.isPickable = false; dome.infiniteDistance = true;
+
+  if(soir){
+    this.soleil.diffuse = new BABYLON.Color3(1,.82,.6);
+    this.scene.clearColor = new BABYLON.Color4(.72,.66,.6,1);
+  }
+
+  /* Nuages qui dérivent */
+  const matNuage = this.mat("nuage", "#FFFFFF", null, { emissive:"#555555", alpha:.9 });
+  for(let i=0;i<7;i++){
+    const n = new BABYLON.TransformNode("nuage"+i, this.scene);
+    n.position.set(-70+Math.random()*140, 26+Math.random()*12, -50+Math.random()*100);
+    for(let k=0;k<4;k++){
+      const b = this.sph("np", 7+Math.random()*7, k*5-7, Math.random()*2, Math.random()*3, matNuage, n);
+      b.scaling.y = .5; b.isPickable = false;
+    }
+    const vitesse = .22 + Math.random()*.3;
+    this.animations.push(() => {
+      n.position.x += vitesse * this.engine.getDeltaTime()/1000 * 3;
+      if(n.position.x > 90) n.position.x = -90;
+    });
+  }
+
+  /* Collines lointaines dans la brume + silhouettes de ville */
+  const matColline = this.mat("colline", "#9FC3A8", null, { emissive:"#2A3A2E" });
+  for(let i=0;i<9;i++){
+    const h = 8+Math.random()*12;
+    const c = this.sph("colline", 36+Math.random()*26, -80+i*20, -4, -78-Math.random()*16, matColline);
+    c.scaling.y = h/30; c.isPickable = false; c.freezeWorldMatrix();
+  }
+  const matVille = this.mat("ville", "#B9B3C9", null, { emissive:"#2A2436" });
+  for(let i=0;i<16;i++){
+    const h = 8+Math.random()*18;
+    const b = this.boite("imm", 5+Math.random()*5, h, 5, -78+i*10, h/2-2, 82, matVille);
+    b.isPickable = false; b.freezeWorldMatrix();
+  }
+
+  /* Barrière invisible : impossible de sortir du lieu */
+  const matInvisible = this.mat("inv", "#000000", null, { alpha:0 });
+  const d = T/2 - .5;
+  [[0,-d,T,.4],[0,d,T,.4],[-d,0,.4,T],[d,0,.4,T]].forEach(([x,z,l,p]) => {
+    const m = this.boite("bord", l, 6, p, x, 3, z, matInvisible);
+    m.checkCollisions = true; m.isPickable = false; m.visibility = 0; m.freezeWorldMatrix();
+  });
+
+  /* Décor propre au lieu */
+  if(zone.id === "garden") this.decorJardin();
+  if(zone.id === "street") this.decorRue();
+  if(zone.id === "park")   this.decorParc();
+
+  /* Porte / passage de sortie */
+  const sorties = { garden:[0,0,-12.6,Math.PI], street:[11,0,10,0], park:null };
+  const s = sorties[zone.id];
+  if(s) this.poserPorte(zone, s[0], s[1], s[2], s[3]);
+
+  const dep = zone.exterieur.depart || [0, T/2 - 4, Math.PI];
+  this.camera.position.set(dep[0], 1.3, dep[1]);
+  this.camera.rotation.y = dep[2];
+};
+
+/* ---------- Décor du jardin ---------- */
+Monde.decorJardin = function(){
+  const S = this.statique.bind(this);
+  const brique = this.mat("brique", "#FFFFFF", "brique");
+  const bardage = this.mat("bardage", "#FFFFFF", "bardage");
+  const tuile = this.mat("tuile", "#FFFFFF", "tuile");
+  const bois  = this.mat("bois2", "#FFFFFF", "bois");
+  const vitre = this.mat("vitre", "#FFFFFF", "vitrine", { brillant:.6 });
+  const terre = this.mat("terre2", "#FFFFFF", "terre");
+
+  /* Façade de la maison avec toit à deux pentes */
+  S(this.boite("facade", 10,3.4,7, 0,1.7,-16, bardage));
+  /* Deux pans qui se rejoignent au faîte : largeur 10, faîte 1.4 m plus haut */
+  const pente = Math.atan2(1.4, 5);
+  const longueur = Math.hypot(5, 1.4) + .3;
+  const toitG = this.boite("toitG", longueur,.24,7.6, -2.5,4.1,-16, tuile);
+  toitG.rotation.z = pente; S(toitG, false);
+  const toitD = this.boite("toitD", longueur,.24,7.6, 2.5,4.1,-16, tuile);
+  toitD.rotation.z = -pente; S(toitD, false);
+  /* Pignons (les triangles sous le toit) */
+  [-3.4, 3.4].forEach((z,i) => {
+    const pg = this.boite("pignon"+i, 10,1.4,.2, 0,4.1,-16+z, bardage);
+    S(pg, false);
+  });
+  S(this.boite("porteM", 1.1,2.1,.14, 0,1.05,-12.45, bois), false);
+  [[-3,1.9],[3,1.9],[-3,.9],[3,.9]].forEach(([x,y],i) =>
+    S(this.boite("fen"+i, 1.2,1,.1, x,y+.4,-12.46, vitre), false));
+  S(this.cyl("gouttiere", .12,7, 5.1,3.4,-16, this.mat("gt","#D8D3C8")), false);
+
+  /* Maisons voisines */
+  [[-14,-14],[14,-15]].forEach(([x,z],i) => {
+    S(this.boite("vois"+i, 7,3,6, x,1.5,z, brique));
+    const t = this.cyl("voist"+i, 10.6,1.8, x,3.9,z, tuile, null, 0);  /* pyramide */
+    t.rotation.y = Math.PI/4; S(t,false);
+  });
+
+  /* Abri de jardin + potager + bac à sable */
+  S(this.boite("abri", 2.4,2,2, -10,1,-8, bois));
+  const toitAbri = this.boite("abriT", 2.8,.2,2.4, -10,2.1,-8, this.mat("at","#8A5A3B"));
+  S(toitAbri,false);
+  for(let i=0;i<3;i++){
+    S(this.boite("potager"+i, 3,.3,.8, 8,.15,-8+i*1.2, terre), false);
+    for(let k=0;k<5;k++) S(this.sph("legume", .3, 6.8+k*.6, .35, -8+i*1.2,
+      this.mat("lg", ["#FF5D73","#FFC93C","#7BE0AD"][i])), false);
+  }
+  S(this.boite("sable", 3,.3,3, -7,.15,9, this.mat("sb","#E8D6A8")), false);
+  S(this.boite("sableB1", 3.2,.35,.2, -7,.17,7.4, bois), false);
+  S(this.boite("sableB2", 3.2,.35,.2, -7,.17,10.6, bois), false);
+
+  /* Table de jardin + parasol */
+  S(this.cyl("tableJ", 1.6,.08, 7,.76,7, bois));
+  S(this.cyl("piedJ", .12,.76, 7,.38,7, this.mat("pj","#777")), false);
+  S(this.cyl("mat", .08,2.4, 7,1.2,7, this.mat("mt","#A9A2A0")), false);
+  const pars = this.cyl("parasol", 3.2,.5, 7,2.3,7, this.mat("ps","#FF5D73"), null, .1);
+  S(pars,false);
+
+  /* Niche du chien */
+  S(this.boite("niche", 1.2,1,1.3, 4.5,.5,3.4, bois));
+  const nicheT = this.boite("nicheT", 1.5,.18,1.5, 4.5,1.05,3.4, this.mat("nt","#B04A3A"));
+  S(nicheT,false);
+
+  /* Clôture autour du jardin */
+  const matCl = this.mat("cloture", "#F0E6D2");
+  for(let x=-13;x<=13;x+=1.1){
+    if(Math.abs(x) < 1.4) continue;
+    S(this.boite("cl", .12,1.1,.1, x,.55,12.8, matCl), false);
+  }
+  S(this.boite("clH", 27,.1,.12, 0,.95,12.8, matCl), false);
+
+  /* Bornes lumineuses */
+  for(let i=0;i<5;i++){
+    S(this.cyl("borne", .1,.6, -8+i*4,.3,11, this.mat("bo","#6B6B70")), false);
+    const t = this.sph("borneL", .22, -8+i*4,.65,11,
+      this.mat("bl","#FFF3C0", null, { emissive:"#6A5A18" }));
+    t.isPickable = false; t.freezeWorldMatrix();
+  }
+};
+
+/* ---------- Décor de la rue ---------- */
+Monde.decorRue = function(){
+  const S = this.statique.bind(this);
+  const brique = this.mat("brique3", "#FFFFFF", "brique");
+  const vitre = this.mat("vitre3", "#FFFFFF", "vitrine", { brillant:.6 });
+  const metal = this.mat("metal3", "#FFFFFF", "metal", { brillant:.4 });
+  const pave  = this.mat("pave3", "#FFFFFF", "pave");
+  const beton = this.mat("beton", "#CFC9BF");
+
+  /* Trottoirs pavés des deux côtés */
+  S(this.boite("trottoir1", 34,.3,6, 0,.15,10, pave), false);
+  S(this.boite("trottoir2", 34,.3,5, 0,.15,-10, pave), false);
+  S(this.boite("bord1", 34,.34,.3, 0,.17,7, beton), false);
+  S(this.boite("bord2", 34,.34,.3, 0,.17,-7.5, beton), false);
+
+  /* Passage piéton */
+  const matBlanc = this.mat("zebra", "#F2F2F2");
+  for(let i=0;i<6;i++) S(this.boite("zb", 1,.02,4.4, -2+i*1.1, .02, 0, matBlanc), false, true);
+
+  /* Immeubles à étages avec fenêtres, balcons et jardinières */
+  for(let b=0;b<4;b++){
+    const x = -13 + b*8.5, etages = 3 + (b%2);
+    const h = etages*2.6;
+    S(this.boite("imm"+b, 7.4, h, 6, x, h/2+.3, 15, brique));
+    for(let e=0;e<etages;e++){
+      for(let f=0;f<3;f++){
+        const fx = x-2.4+f*2.4, fy = 1.3+e*2.6;
+        S(this.boite("fe", 1.1,1.3,.12, fx, fy+.3, 11.94, vitre), false);
+        S(this.boite("enc", 1.4,.14,.2, fx, fy+1.05, 11.9, beton), false);
+        if(e > 0){
+          S(this.boite("bal", 1.5,.1,.5, fx, fy-.4, 11.7, beton), false);
+          for(let k=0;k<4;k++) S(this.boite("bar", .05,.5,.05, fx-.6+k*.4, fy-.15, 11.5, metal), false);
+          if(f === 1) S(this.boite("jardi", .9,.25,.3, fx, fy-.25, 11.65,
+            this.mat("jd","#C0603F")), false);
+        }
+      }
+    }
+    /* Toit */
+    S(this.boite("toit"+b, 7.8,.3,6.3, x, h+.45, 15, this.mat("tt","#6B6570")), false);
+  }
+
+  /* Vitrines à auvents rayés (hors boutique du vocabulaire) */
+  [[-11.5],[6.5]].forEach(([x],i) => {
+    S(this.boite("vitr"+i, 4,2.2,.14, x,1.4,11.9, vitre), false);
+    const auv = this.boite("auv"+i, 4.4,.16,1.3, x,2.7,11.3,
+      this.mat("av"+i, i ? "#7BE0AD" : "#8ED6FF"));
+    auv.rotation.x = -.26; S(auv,false);
+  });
+
+  /* Abribus (sans banc : le banc est un mot du vocabulaire) */
+  S(this.boite("abri-t", 3.4,.14,1.6, 9.5,2.3,9.4, this.mat("abt","#B6D9EC",null,{alpha:.75})), false);
+  [[8,8.8],[11,8.8],[8,10],[11,10]].forEach(([x,z],i) =>
+    S(this.cyl("abp"+i, .1,2.3, x,1.15,z, metal), false));
+  S(this.boite("abri-f", 3.4,1.8,.1, 9.5,1.2,10.1, this.mat("abf","#CFEAF6",null,{alpha:.5})), false);
+
+  /* Lampadaires, bouche d'incendie, panneau piéton, guirlandes */
+  for(let i=0;i<4;i++){
+    const x = -12+i*8;
+    S(this.cyl("lp", .14,5, x,2.5,8.6, this.mat("lpm","#4A4A52")), false);
+    const t = this.boite("lpt", 1.2,.2,.3, x+.5,5,8.6, this.mat("lpt2","#4A4A52"));
+    S(t,false);
+    const amp = this.sph("amp", .35, x+1,4.85,8.6,
+      this.mat("ampm","#FFF4C8", null, { emissive:"#6A5A18" }));
+    amp.isPickable = false; amp.freezeWorldMatrix();
+  }
+  S(this.cyl("inc", .4,.7, -8.6,.5,8.4, this.mat("incm","#D13A33")), false);
+  S(this.sph("incT", .4, -8.6,.88,8.4, this.mat("incm2","#D13A33")), false);
+  S(this.cyl("ppm", .09,2.4, 4.6,1.2,8.2, metal), false);
+  const pp = this.boite("pp", .5,.6,.06, 4.6,2.5,8.2, this.mat("ppc","#2A6FBF"));
+  S(pp,false);
+
+  /* Guirlandes de fanions au-dessus de la rue */
+  const couleurs = ["#FF5D73","#FFC93C","#7BE0AD","#8ED6FF","#FF9F45"];
+  for(let i=0;i<22;i++){
+    const x = -11+i, creux = Math.sin(i/21*Math.PI)*1.2;
+    const f = this.boite("fanion", .4,.45,.02, x, 5.6-creux, 4,
+      this.mat("fn"+(i%5), couleurs[i%5]));
+    f.rotation.z = Math.PI/4; f.isPickable = false; f.freezeWorldMatrix();
+  }
+
+  /* Entrée du parc, au fond à droite */
+  S(this.boite("arche1", .3,2.6,.3, 9.4,1.3,-9.4, this.mat("arc","#5B7A4A")), false);
+  S(this.boite("arche2", .3,2.6,.3, 12.6,1.3,-9.4, this.mat("arc2","#5B7A4A")), false);
+  S(this.boite("archeT", 3.6,.3,.3, 11,2.7,-9.4, this.mat("arc3","#5B7A4A")), false);
+};
+
+/* ---------- Décor du parc ---------- */
+Monde.decorParc = function(){
+  const S = this.statique.bind(this);
+  const bois = this.mat("boisP", "#FFFFFF", "bois");
+  const metal = this.mat("metalP", "#FFFFFF", "metal", { brillant:.4 });
+  const herbe = this.mat("herbeP", "#FFFFFF", "herbe");
+  const souple = this.mat("souple", "#C9566B");
+
+  /* Pelouses (le sol du parc est en gravier) */
+  [[-8,-8,12,10],[9,-9,10,9],[-10,8,9,9]].forEach(([x,z,l,p],i) => {
+    const g = this.boite("pelouse"+i, l,.06,p, x,.03,z, herbe);
+    g.receiveShadows = true; g.isPickable = false; g.freezeWorldMatrix();
+  });
+
+  /* Sol souple de l'aire de jeux */
+  S(this.boite("aire", 9,.08,8, -5.5,.04,-4, souple), false, true);
+
+  /* Tape-cul (bascule) */
+  S(this.cyl("tcp", .3,.5, -9,.25,-1, metal), false);
+  const planche = this.boite("tc", .5,.12,3.4, -9,.6,-1, bois);
+  planche.rotation.x = .16; S(planche,false);
+  [[-9,.9,-2.5],[-9,.4,.5]].forEach(([x,y,z],i) =>
+    S(this.boite("poignee"+i, .5,.26,.06, x,y,z, this.mat("pg"+i,"#FFC93C")), false));
+
+  /* Table de pique-nique */
+  S(this.boite("pqT", 2.2,.1,1, 10,.76,-4, bois));
+  [[9.2,-3.6],[10.8,-3.6],[9.2,-4.4],[10.8,-4.4]].forEach(([x,z],i) =>
+    S(this.cyl("pqp"+i, .1,.76, x,.38,z, bois), false));
+  S(this.boite("pqB1", 2.2,.08,.35, 10,.45,-3.1, bois), false);
+  S(this.boite("pqB2", 2.2,.08,.35, 10,.45,-4.9, bois), false);
+
+  /* Roseaux au bord de la mare */
+  for(let i=0;i<24;i++){
+    const a = Math.random()*Math.PI*2, r = 3.2+Math.random()*.8;
+    const x = 6+Math.cos(a)*r, z = 5+Math.sin(a)*r;
+    const t = this.cyl("roseau", .05, .9+Math.random()*.7, x, .5, z, this.mat("ros","#6F9B4A"));
+    t.rotation.z = (Math.random()-.5)*.3; t.isPickable = false; t.freezeWorldMatrix();
+  }
+
+  /* Massifs fleuris */
+  const couleurs = ["#FF5D73","#FFC93C","#C86BC8","#FF9F45","#FFFFFF"];
+  for(let i=0;i<40;i++){
+    const x = -12+Math.random()*5, z = 6+Math.random()*6;
+    S(this.cyl("tige", .03,.32, x,.16,z, this.mat("tg","#4C8A3F")), false);
+    const f = this.sph("petale", .18, x,.36,z, this.mat("pt"+(i%5), couleurs[i%5]));
+    f.scaling.y = .6; f.isPickable = false; f.freezeWorldMatrix();
+  }
+
+  /* Lampadaires du parc */
+  for(let i=0;i<4;i++){
+    const a = i/4*Math.PI*2;
+    const x = Math.cos(a)*11, z = Math.sin(a)*11;
+    S(this.cyl("plp", .12,3.6, x,1.8,z, this.mat("plpm","#3F3F46")), false);
+    const g = this.sph("plg", .4, x,3.7,z,
+      this.mat("plgm","#FFF6D0", null, { emissive:"#6A5A18" }));
+    g.isPickable = false; g.freezeWorldMatrix();
+  }
+
+  /* Panneau d'accueil */
+  S(this.cyl("pap1", .1,1.6, -1,.8,12, bois), false);
+  S(this.cyl("pap2", .1,1.6, 1,.8,12, bois), false);
+  const panneau = this.boite("pan", 2.6,.9,.1, 0,1.6,12, this.mat("panm","#8A5A3B"));
+  S(panneau,false);
+  /* Texte « PARK » dessiné en relief */
+  const matTexte = this.mat("txt", "#FFF6E3");
+  [[-.8,0],[-.25,0],[.3,0],[.85,0]].forEach(([dx],i) =>
+    S(this.boite("lettre"+i, .3,.4,.04, dx,1.6,11.92, matTexte), false));
+
+  /* Arbres du parc (le mot « tree » appartient au jardin, pas au parc) */
+  [[-13,-10],[13,-12],[-14,2],[14,8],[-3,-12]].forEach(([x,z],i) => {
+    S(this.cyl("tronc"+i, .5,3.2, x,1.6,z, this.mat("tr"+i,"#FFFFFF","ecorce")));
+    const c = this.sph("cime"+i, 4.4, x,4.2,z, this.mat("cm"+i,"#FFFFFF","feuillage"));
+    c.scaling.y = .85; S(c,false);
+  });
+};
+
+/* ===================================================================
+   F.4 POSER UN OBJET DU VOCABULAIRE
+   -------------------------------------------------------------------
+   Tant qu'il n'est pas découvert, l'objet est ENTOURÉ EN ROUGE et
+   son contour « respire » doucement. Une fois découvert, le contour
+   passe au vert menthe.
+   =================================================================== */
+const ROUGE = typeof BABYLON !== "undefined" ? new BABYLON.Color3(0.91, 0.15, 0.16) : null;
+const MENTHE = typeof BABYLON !== "undefined" ? new BABYLON.Color3(0.30, 0.85, 0.60) : null;
+
+/* Petite boîte à outils passée à chaque constructeur d'objet */
+Monde.kit = function(parent){
+  const M = this;
+  return {
+    b:(l,h,p,x,y,z,mat) => M.boite("p", l,h,p, x,y,z, mat, parent),
+    c:(d,h,x,y,z,mat,dTop) => M.cyl("p", d,h, x,y,z, mat, parent, dTop),
+    s:(d,x,y,z,mat) => M.sph("p", d, x,y,z, mat, parent),
+    /* tore (anneau) */
+    t:(d,ep,x,y,z,mat) => {
+      const m = BABYLON.MeshBuilder.CreateTorus("p",
+        { diameter:d, thickness:ep, tessellation:18 }, M.scene);
+      m.position.set(x,y,z); m.material = mat; m.parent = parent; return m;
+    },
+    /* plan (pour les affiches, écrans, miroirs…) */
+    pl:(l,h,x,y,z,mat) => {
+      const m = BABYLON.MeshBuilder.CreatePlane("p", { width:l, height:h }, M.scene);
+      m.position.set(x,y,z); m.material = mat; m.parent = parent; return m;
+    },
+    /* disque plat */
+    d:(r,x,y,z,mat) => {
+      const m = BABYLON.MeshBuilder.CreateDisc("p", { radius:r, tessellation:24 }, M.scene);
+      m.position.set(x,y,z); m.rotation.x = Math.PI/2; m.material = mat; m.parent = parent;
+      return m;
+    },
+    m:(nom,couleur,texture,opt) => M.mat(nom,couleur,texture,opt),
+    parent
+  };
+};
+
+Monde.poserObjet = function(mot, estBonus, zone){
+  const racine = new BABYLON.TransformNode("obj-"+mot.en, this.scene);
+  racine.position.set(mot.pos[0], mot.pos[1], mot.pos[2]);
+  if(mot.rotY) racine.rotation.y = mot.rotY;   /* objets accrochés aux murs */
+
+  const constructeur = OBJETS[mot.model] || OBJETS._defaut;
+  const infos = constructeur(this.kit(racine), this) || {};
+
+  /* Tous les morceaux sont cliquables et projettent une ombre */
+  const morceaux = racine.getChildMeshes();
+  morceaux.forEach(m => {
+    m.isPickable = true;
+    if(this.ombres && !infos.sansOmbre){
+      try{ this.ombres.addShadowCaster(m, false); }catch(e){}
+    }
+    m.receiveShadows = true;
+  });
+
+  /* Boîte de collision invisible pour les gros objets (on ne traverse pas un lit) */
+  if(infos.collision){
+    const [l,h,p,dy] = infos.collision;
+    const box = BABYLON.MeshBuilder.CreateBox("col", { width:l, height:h, depth:p }, this.scene);
+    box.position.set(mot.pos[0], (dy||0) + h/2, mot.pos[2]);
+    box.checkCollisions = true; box.isPickable = false; box.visibility = 0;
+    box.freezeWorldMatrix();
+  }
+
+  /* Ombre de contact : une tache sombre sous l'objet */
+  if(!infos.sansOmbre && mot.pos[1] < 1.2){
+    const r = infos.rayonOmbre || .5;
+    const tache = BABYLON.MeshBuilder.CreateDisc("contact", { radius:r, tessellation:16 }, this.scene);
+    tache.rotation.x = Math.PI/2;
+    tache.position.set(mot.pos[0], .015, mot.pos[2]);
+    tache.material = this.mat("contact", "#000000", null, { alpha:.18 });
+    tache.isPickable = false; tache.freezeWorldMatrix();
+  }
+
+  racine.metadata = { mot, estBonus, morceaux, decouvert:false, basY:racine.position.y };
+  this.cliquables.push(racine);
+
+  /* Déjà découvert lors d'une session précédente ? */
+  const deja = Progres.zone(zone.id).decouverts.includes(mot.en);
+  this.surligner(racine, deja ? "fait" : "aFaire");
+  if(deja) racine.metadata.decouvert = true;
+
+  /* Le contour « respire » : plus visible quand il reste à découvrir */
+  const phase = Math.random() * 6;
+  this.animations.push(t => {
+    const meta = racine.metadata;
+    const base = meta.decouvert ? .008 : .014;
+    const l = base + Math.sin(t*2.2 + phase) * (meta.decouvert ? .002 : .006);
+    for(const m of meta.morceaux) m.outlineWidth = Math.max(.003, l);
+  });
+
+  return racine;
+};
+
+/* Change la couleur du contour : rouge à découvrir, menthe découvert */
+Monde.surligner = function(racine, etat){
+  const couleur = etat === "fait" ? MENTHE : ROUGE;
+  for(const m of racine.metadata.morceaux){
+    m.renderOutline = true;
+    m.outlineColor = couleur;
+    m.outlineWidth = etat === "fait" ? .008 : .014;
+  }
+};
+
+/* Petit rebond quand l'enfant touche l'objet */
+Monde.rebondir = function(racine){
+  const base = racine.metadata.basY;
+  let t = 0;
+  const obs = this.scene.onBeforeRenderObservable.add(() => {
+    t += this.engine.getDeltaTime() / 1000;
+    racine.position.y = base + Math.abs(Math.sin(t*9)) * .18 * Math.max(0, 1 - t/0.9);
+    if(t > .9){ racine.position.y = base; this.scene.onBeforeRenderObservable.remove(obs); }
+  });
+};
+
+/* ---------- La porte de sortie (s'ouvre après le défi) ---------- */
+Monde.poserPorte = function(zone, x, y, z, rotY){
+  const pivot = new BABYLON.TransformNode("pivot-porte", this.scene);
+  pivot.position.set(x - .55, y, z);
+  pivot.rotation.y = rotY || 0;
+
+  const matPorte = this.mat("porte", "#FFFFFF", "bois");
+  const matCadre = this.mat("cadre", "#F2E8D8");
+  const matPoignee = this.mat("poignee", "#E8C27A", "metal", { brillant:.6 });
+
+  const battant = this.boite("battant", 1.1, 2.1, .1, .55, 1.05, 0, matPorte);
+  battant.parent = pivot;
+  const poignee = this.sph("pg", .12, 1, 1.05, -.1, matPoignee);
+  poignee.parent = pivot;
+  [battant, poignee].forEach(m => { m.isPickable = true; m.receiveShadows = true; });
+
+  /* Encadrement */
+  const cadre = new BABYLON.TransformNode("cadre", this.scene);
+  cadre.position.set(x, y, z); cadre.rotation.y = rotY || 0;
+  [[-.68,1.1,0,.14,2.3,.16],[.68,1.1,0,.14,2.3,.16],[0,2.22,0,1.5,.16,.16]]
+    .forEach(([bx,by,bz,l,h,p]) => {
+      const m = this.boite("c", l,h,p, bx,by,bz, matCadre); m.parent = cadre;
+      m.isPickable = false; m.receiveShadows = true;
+    });
+
+  /* Panneau « cadenas » tant que ce n'est pas débloqué */
+  const matVerrou = this.mat("verrou", "#FFC93C", null, { emissive:"#4A3A10" });
+  const verrou = this.boite("verrou", .34,.34,.06, .55, 1.5, -.09, matVerrou);
+  verrou.parent = pivot;
+
+  this.porte = { pivot, verrou, ouverte:false, battant };
+  battant.metadata = { porte:true };
+  poignee.metadata = { porte:true };
+
+  /* Clic sur la porte : Hoot explique s'il faut encore jouer */
+  this.scene.onPointerObservable.add(info => {
+    if(info.type !== BABYLON.PointerEventTypes.POINTERTAP) return;
+    const p = info.pickInfo;
+    if(p && p.hit && p.pickedMesh && p.pickedMesh.metadata?.porte){
+      if(this.porte.ouverte) Jeu.passerLaPorte();
+      else UI.hoot("Fais le défi 🎤 pour ouvrir la porte !", true);
+    }
+  });
+};
+
+/* Ouvre la porte en grand, avec confettis */
+Monde.ouvrirPorte = function(){
+  if(!this.porte || this.porte.ouverte) return;
+  this.porte.ouverte = true;
+  if(this.porte.verrou) this.porte.verrou.dispose();
+  const pivot = this.porte.pivot;
+  const cible = -Math.PI/2 * .85;
+  const depart = pivot.rotation.y;
+  let t = 0;
+  const obs = this.scene.onBeforeRenderObservable.add(() => {
+    t += this.engine.getDeltaTime() / 1000;
+    const k = Math.min(1, t/1.1);
+    pivot.rotation.y = depart + cible * (1 - Math.pow(1-k, 3));
+    if(k >= 1) this.scene.onBeforeRenderObservable.remove(obs);
+  });
+  this.confettis();
+};
+
+/* Confettis : petits carrés colorés qui tombent */
+Monde.confettis = function(){
+  const couleurs = ["#FF5D73","#FFC93C","#7BE0AD","#8ED6FF","#FF9F45"];
+  const cam = this.camera;
+  const devant = cam.getDirection(BABYLON.Axis.Z).scale(4).add(cam.position);
+  const pieces = [];
+  for(let i=0;i<70;i++){
+    const m = BABYLON.MeshBuilder.CreatePlane("cf", { size:.1 }, this.scene);
+    m.material = this.mat("cf"+(i%5), couleurs[i%5], null, { emissive:couleurs[i%5] });
+    m.position.set(devant.x + (Math.random()-.5)*5, devant.y + 2.5 + Math.random()*2,
+                   devant.z + (Math.random()-.5)*5);
+    m.isPickable = false;
+    pieces.push({ m, vy:-(.9+Math.random()*1.2), vr:(Math.random()-.5)*7,
+                  vx:(Math.random()-.5)*.6 });
+  }
+  let t = 0;
+  const obs = this.scene.onBeforeRenderObservable.add(() => {
+    const dt = this.engine.getDeltaTime()/1000; t += dt;
+    for(const p of pieces){
+      p.m.position.y += p.vy*dt; p.m.position.x += p.vx*dt;
+      p.m.rotation.z += p.vr*dt; p.m.rotation.x += p.vr*dt*.6;
+    }
+    if(t > 3.4){
+      pieces.forEach(p => p.m.dispose());
+      this.scene.onBeforeRenderObservable.remove(obs);
+    }
+  });
+};
+
+/* ===================================================================
+   F.5 CATALOGUE DES OBJETS 3D
+   -------------------------------------------------------------------
+   Une fonction par objet. `k` est la boîte à outils (b=boîte,
+   c=cylindre, s=sphère, t=tore, pl=plan, d=disque, m=matériau).
+   Chaque fonction peut renvoyer :
+     collision : [largeur, hauteur, profondeur, hauteurDuSol]
+     rayonOmbre: taille de la tache d'ombre au sol
+     sansOmbre : true pour les objets volants ou plats
+   =================================================================== */
+const OBJETS = {
+
+/* ---------------- CHAMBRE ---------------- */
+bed(k){
+  const bois = k.m("lit-bois","#FFFFFF","bois");
+  const drap = k.m("lit-drap","#E8F3FF");
+  const couette = k.m("lit-couette","#FFFFFF","tissu");
+  k.b(1.5,.3,2.1, 0,.28,0, bois);
+  k.b(1.6,.1,2.2, 0,.48,0, drap);
+  k.b(1.55,.18,1.3, 0,.58,.35, couette);
+  k.b(1.6,.8,.12, 0,.6,-1.08, bois);
+  k.b(1.6,.4,.12, 0,.3,1.08, bois);
+  [[-.68,-1],[.68,-1],[-.68,1],[.68,1]].forEach(([x,z]) => k.c(.12,.26,x,.13,z,bois));
+  return { collision:[1.6,.7,2.2,0], rayonOmbre:1.1 };
+},
+pillow(k){
+  const m = k.m("oreiller","#FFF8E8");
+  const p = k.b(.72,.2,.46, 0,0,0, m);
+  p.scaling.y = 1;
+  k.b(.62,.16,.38, 0,.06,0, k.m("oreiller2","#FFEFD4"));
+  return { rayonOmbre:.4, sansOmbre:true };
+},
+teddy(k){
+  const f = k.m("ours","#FFFFFF","fourrure");
+  const museau = k.m("ours-m","#F2DCC0");
+  const noir = k.m("ours-n","#2A1A12");
+  k.s(.42, 0,.3,0, f);                      /* ventre */
+  k.s(.3, 0,.62,0, f);                      /* tête */
+  k.s(.14, -.17,.76,0, f); k.s(.14,.17,.76,0, f);   /* oreilles */
+  k.s(.16, 0,.57,.15, museau);
+  k.s(.05, -.08,.66,.22, noir); k.s(.05,.08,.66,.22, noir);
+  k.s(.06, 0,.57,.25, noir);
+  k.s(.17, -.26,.34,.08, f); k.s(.17,.26,.34,.08, f);  /* bras */
+  k.s(.19, -.15,.1,.08, f);  k.s(.19,.15,.1,.08, f);   /* jambes */
+  return { rayonOmbre:.4 };
+},
+window(k){
+  const cadre = k.m("fen-cadre","#FFFFFF");
+  const vitre = k.m("fen-vitre","#FFFFFF","vitrine",{ brillant:.7, alpha:.5 });
+  const rideau = k.m("fen-rideau","#FFFFFF","tissu");
+  k.b(1.7,1.5,.08, 0,0,0, cadre);
+  k.b(1.5,1.3,.04, 0,0,-.04, vitre);
+  k.b(.06,1.3,.1, 0,0,-.02, cadre);
+  k.b(1.5,.06,.1, 0,0,-.02, cadre);
+  k.b(1.9,.1,.26, 0,-.8,.04, cadre);
+  k.b(.3,1.7,.08, -.9,.1,.14, rideau);
+  k.b(.3,1.7,.08, .9,.1,.14, rideau);
+  return { sansOmbre:true };
+},
+desk(k){
+  const bois = k.m("bur","#FFFFFF","boisClair");
+  k.b(1.4,.07,.7, 0,.74,0, bois);
+  [[-.62,-.28],[.62,-.28],[-.62,.28],[.62,.28]].forEach(([x,z]) => k.c(.08,.74,x,.37,z,bois));
+  k.b(.5,.4,.6, .45,.5,0, bois);
+  return { collision:[1.4,.8,.7,0], rayonOmbre:.8 };
+},
+globe(k){
+  k.c(.2,.04, 0,0,0, k.m("gl-s","#8A5A3B"));
+  k.c(.03,.3, 0,.15,0, k.m("gl-t","#C9A05A"));
+  const g = k.s(.3, 0,.34,0, k.m("gl-b","#4FA3D8"));
+  const terres = k.s(.31, .06,.38,.05, k.m("gl-v","#5FA85C"));
+  terres.scaling.set(.5,.4,.5);
+  return { rayonOmbre:.2, sansOmbre:true };
+},
+toybox(k){
+  const b = k.m("tb","#FF9F45");
+  k.b(.9,.5,.6, 0,.25,0, b);
+  k.b(.95,.08,.65, 0,.54,0, k.m("tb2","#E4833A"));
+  k.s(.22, -.2,.66,0, k.m("tb3","#7BE0AD"));
+  k.s(.22, .2,.66,0, k.m("tb4","#8ED6FF"));
+  return { collision:[.9,.6,.6,0], rayonOmbre:.5 };
+},
+slippers(k){
+  const m = k.m("ch","#C86BC8");
+  [-.14,.14].forEach(x => {
+    const s = k.s(.26, x,.07,0, m); s.scaling.set(1,.5,1.7);
+    k.b(.2,.1,.14, x,.12,-.1, m);
+  });
+  return { rayonOmbre:.3 };
+},
+
+/* ---------------- SALLE DE BAIN ---------------- */
+bath(k){
+  const email = k.m("bain","#FFFFFF",null,{ brillant:.5 });
+  const eau = k.m("bain-eau","#FFFFFF","eau",{ alpha:.8 });
+  k.b(1.8,.65,.95, 0,.32,0, email);
+  k.b(1.6,.45,.78, 0,.45,0, eau);
+  k.c(.06,.3, -.75,.78,0, k.m("bain-rob","#FFFFFF","metal",{brillant:.6}));
+  k.s(.1, -.75,.92,.08, k.m("bain-rob2","#FFFFFF","metal",{brillant:.6}));
+  [[-.82,-.4],[.82,-.4],[-.82,.4],[.82,.4]].forEach(([x,z]) => k.c(.1,.12,x,.06,z,email));
+  return { collision:[1.8,.7,.95,0], rayonOmbre:1 };
+},
+toothbrush(k){
+  k.b(.04,.03,.22, 0,0,0, k.m("bd","#4FA3D8"));
+  k.b(.05,.04,.06, 0,.01,.13, k.m("bd2","#FFFFFF"));
+  for(let i=0;i<5;i++) k.b(.01,.04,.01, -.015+i*.008,.045,.13, k.m("bd3","#EDEDED"));
+  return { rayonOmbre:.1, sansOmbre:true };
+},
+soap(k){
+  const s = k.s(.18, 0,.03,0, k.m("sv","#7BE0AD",null,{brillant:.4}));
+  s.scaling.set(1.3,.55,1);
+  k.b(.2,.03,.14, 0,-.01,0, k.m("sv2","#FFFFFF"));
+  return { rayonOmbre:.12, sansOmbre:true };
+},
+towel(k){
+  const t = k.m("sv-t","#FFFFFF","tissu");
+  const jaune = k.m("sv-j","#FFC93C");
+  k.c(.05,.9, 0,.72,0, k.m("sv-b","#FFFFFF","metal",{brillant:.5})).rotation.z = Math.PI/2;
+  k.b(.7,1.1,.1, 0,.14,0, jaune);
+  k.b(.72,.12,.14, 0,.7,0, jaune);
+  k.b(.68,.1,.11, 0,.2,0, t);
+  return { sansOmbre:true };
+},
+mirror(k){
+  k.b(.9,1.1,.06, 0,0,0, k.m("mi-c","#D8CDBB"));
+  const g = k.pl(.78,.98, 0,0,-.04, k.m("mi-g","#FFFFFF","vitrine",{brillant:.9}));
+  g.rotation.y = Math.PI;
+  return { sansOmbre:true };
+},
+comb(k){
+  k.b(.16,.03,.05, 0,0,0, k.m("pg2","#3B1E54"));
+  for(let i=0;i<9;i++) k.b(.008,.05,.012, -.07+i*.017,-.03,0, k.m("pg3","#3B1E54"));
+  return { rayonOmbre:.08, sansOmbre:true };
+},
+sink(k){
+  const b = k.m("lv","#FFFFFF",null,{brillant:.5});
+  k.c(.6,.18, 0,.9,0, b);
+  k.c(.46,.1, 0,.93,0, k.m("lv2","#E8F2F6"));
+  k.c(.16,.9, 0,.45,0, b);
+  k.c(.05,.26, 0,1.08,-.2, k.m("lv3","#FFFFFF","metal",{brillant:.6}));
+  return { collision:[.6,1,.6,0], rayonOmbre:.4 };
+},
+shampoo(k){
+  k.c(.16,.34, 0,0,0, k.m("sh","#C86BC8"));
+  k.c(.07,.07, 0,.2,0, k.m("sh2","#FFFFFF"));
+  return { rayonOmbre:.12, sansOmbre:true };
+},
+
+/* ---------------- CUISINE ---------------- */
+table(k){
+  const bois = k.m("tb-b","#FFFFFF","boisClair");
+  k.b(1.7,.08,1.1, 0,.74,0, bois);
+  [[-.75,-.45],[.75,-.45],[-.75,.45],[.75,.45]].forEach(([x,z]) => k.c(.1,.74,x,.37,z,bois));
+  k.b(1.5,.06,.1, 0,.5,0, bois);
+  return { collision:[1.7,.8,1.1,0], rayonOmbre:1 };
+},
+chair(k){
+  const bois = k.m("ch-b","#FFFFFF","bois");
+  const coussin = k.m("ch-c","#FF5D73");
+  k.b(.46,.07,.46, 0,.45,0, bois);
+  k.b(.42,.05,.42, 0,.5,0, coussin);
+  [[-.19,-.19],[.19,-.19],[-.19,.19],[.19,.19]].forEach(([x,z]) => k.c(.06,.45,x,.22,z,bois));
+  k.b(.46,.55,.06, 0,.76,-.2, bois);
+  k.b(.4,.08,.04, 0,.62,-.18, coussin);
+  return { collision:[.5,.9,.5,0], rayonOmbre:.35 };
+},
+fridge(k){
+  const blanc = k.m("fr","#F4F6F8",null,{brillant:.3});
+  const metal = k.m("fr-m","#FFFFFF","metal",{brillant:.6});
+  k.b(.9,1.9,.75, 0,.95,0, blanc);
+  k.b(.86,1.2,.04, 0,1.3,.38, k.m("fr2","#E8ECEF"));
+  k.b(.86,.6,.04, 0,.4,.38, k.m("fr3","#E8ECEF"));
+  k.b(.05,.5,.05, .3,1.35,.42, metal);
+  k.b(.05,.3,.05, .3,.5,.42, metal);
+  k.b(.12,.16,.02, -.1,1.6,.41, k.m("fr4","#FFC93C"));
+  return { collision:[.9,1.9,.75,0], rayonOmbre:.6 };
+},
+cup(k){
+  const p = k.m("tasse","#FFFFFF",null,{brillant:.4});
+  k.c(.16,.16, 0,.08,0, p, null, .17);
+  k.c(.13,.03, 0,.14,0, k.m("tasse-c","#8A5A3B"));
+  const anse = k.t(.12,.025, .11,.08,0, p);
+  anse.rotation.y = Math.PI/2;
+  return { rayonOmbre:.12, sansOmbre:true };
+},
+apple(k){
+  k.s(.2, 0,.1,0, k.m("pomme","#E03A3A",null,{brillant:.3}));
+  k.c(.02,.08, 0,.22,0, k.m("pomme-t","#6B4A2A"));
+  const f = k.s(.1, .05,.24,0, k.m("pomme-f","#4FA85C"));
+  f.scaling.set(1,.3,.6);
+  return { rayonOmbre:.13, sansOmbre:true };
+},
+banana(k){
+  const j = k.m("ban","#FFD93B");
+  for(let i=0;i<5;i++){
+    const a = -.6 + i*.3;
+    const s = k.s(.09, Math.sin(a)*.12, .05 + Math.cos(a)*.03, 0, j);
+    s.scaling.set(1,.9,1.6);
+  }
+  return { rayonOmbre:.12, sansOmbre:true };
+},
+spoon(k){
+  const m = k.m("cu","#FFFFFF","metal",{brillant:.7});
+  k.b(.02,.01,.14, 0,0,0, m);
+  const t = k.s(.07, 0,0,.1, m); t.scaling.set(1,.35,1.4);
+  return { rayonOmbre:.08, sansOmbre:true };
+},
+plate(k){
+  k.c(.3,.025, 0,0,0, k.m("as","#FFFFFF",null,{brillant:.4}));
+  k.c(.22,.028, 0,.004,0, k.m("as2","#E8EEF2"));
+  return { rayonOmbre:.18, sansOmbre:true };
+},
+bread(k){
+  const p = k.m("pain","#D9A05B");
+  const b = k.b(.4,.2,.2, 0,0,0, p);
+  k.s(.22, -.14,.03,0, p); k.s(.22,.14,.03,0, p);
+  for(let i=0;i<3;i++) k.b(.03,.02,.16, -.1+i*.1,.1,0, k.m("pain2","#B87C3C"));
+  return { rayonOmbre:.2, sansOmbre:true };
+},
+
+/* ---------------- SALON ---------------- */
+sofa(k){
+  const t = k.m("cp","#FFFFFF","tissu");
+  const t2 = k.m("cp2","#A8415A");
+  k.b(2.3,.42,1, 0,.28,0, t);
+  k.b(2.2,.16,.9, 0,.52,.02, t2);
+  k.b(2.3,.75,.25, 0,.62,-.46, t);
+  k.b(.28,.6,1, -1.14,.5,0, t);
+  k.b(.28,.6,1, 1.14,.5,0, t);
+  [[-1,-.4],[1,-.4],[-1,.4],[1,.4]].forEach(([x,z]) =>
+    k.c(.1,.14,x,.07,z,k.m("cp3","#6B4A2A")));
+  return { collision:[2.4,.9,1.1,0], rayonOmbre:1.3 };
+},
+tv(k){
+  const noir = k.m("tv-n","#1A1A20",null,{brillant:.5});
+  const ecran = k.m("tv-e","#2A6FBF",null,{ emissive:"#1E4F8A" });
+  k.b(1.5,.9,.08, 0,0,0, noir);
+  const e = k.pl(1.38,.78, 0,0,.05, ecran);
+  k.b(.5,.06,.3, 0,-.48,0, noir);
+  k.b(.1,.4,.1, 0,-.68,0, noir);
+  return { sansOmbre:false, rayonOmbre:.5 };
+},
+lamp(k){
+  const pied = k.m("la-p","#4A4A52",null,{brillant:.3});
+  const abat = k.m("la-a","#FFF0C0",null,{ emissive:"#5A4A18" });
+  k.c(.4,.05, 0,.03,0, pied);
+  k.c(.06,1.4, 0,.7,0, pied);
+  k.c(.5,.4, 0,1.55,0, abat, null, .3);
+  return { collision:[.45,1.7,.45,0], rayonOmbre:.35 };
+},
+clock(k){
+  const cadre = k.m("ho-c","#8A5A3B");
+  const fond = k.m("ho-f","#FFF8E8");
+  k.c(.56,.07, 0,0,0, cadre).rotation.x = Math.PI/2;
+  const f = k.c(.48,.08, 0,0,.01, fond); f.rotation.x = Math.PI/2;
+  const noir = k.m("ho-n","#3B1E54");
+  for(let i=0;i<12;i++){
+    const a = i/12*Math.PI*2;
+    k.b(.025,.06,.02, Math.sin(a)*.2, Math.cos(a)*.2, .05, noir);
+  }
+  const h = k.b(.03,.14,.02, 0,.06,.06, noir);
+  const m2 = k.b(.025,.2,.02, 0,.09,.06, noir); m2.rotation.z = 1.9;
+  k.s(.05, 0,0,.06, k.m("ho-a","#FF5D73"));
+  return { sansOmbre:true };
+},
+book(k){
+  k.b(.3,.07,.4, 0,0,0, k.m("li-c","#C0392B"));
+  k.b(.27,.06,.37, .01,.01,0, k.m("li-p","#FFF8E8"));
+  k.b(.04,.075,.4, -.14,0,0, k.m("li-d","#8E2A20"));
+  k.b(.1,.012,.12, .02,.04,.1, k.m("li-t","#FFD93B"));
+  return { rayonOmbre:.22, sansOmbre:true };
+},
+plant(k){
+  k.c(.45,.42, 0,.21,0, k.m("pl-p","#C0603F"));
+  k.c(.5,.06, 0,.42,0, k.m("pl-t","#5A3A28"));
+  const v = k.m("pl-v","#FFFFFF","feuillage");
+  for(let i=0;i<7;i++){
+    const a = i/7*Math.PI*2;
+    const f = k.s(.5, Math.cos(a)*.22, .75+Math.random()*.4, Math.sin(a)*.22, v);
+    f.scaling.set(.5,2.2,.5);
+    f.rotation.z = Math.cos(a)*.4; f.rotation.x = Math.sin(a)*.4;
+  }
+  return { collision:[.5,1.2,.5,0], rayonOmbre:.4 };
+},
+cushion(k){
+  const c = k.b(.42,.16,.42, 0,0,0, k.m("co","#FFC93C"));
+  k.b(.3,.18,.3, 0,0,0, k.m("co2","#FFB01F"));
+  return { rayonOmbre:.3, sansOmbre:true };
+},
+rug(k){
+  const r = k.m("tp2","#B5693F");
+  const t = k.b(2.6,.03,1.8, 0,0,0, r);
+  k.b(2.2,.035,1.4, 0,.004,0, k.m("tp3","#D9A05B"));
+  k.b(1.4,.04,.8, 0,.006,0, k.m("tp4","#8A4A2A"));
+  return { sansOmbre:true };
+},
+picture(k){
+  k.b(.9,.7,.06, 0,0,0, k.m("tbl-c","#C9A05A"));
+  const toile = k.pl(.76,.56, 0,0,-.04, k.m("tbl-t","#8ED6FF"));
+  toile.rotation.y = Math.PI;
+  const colline = k.pl(.76,.2, 0,-.16,-.045, k.m("tbl-h","#5CA657"));
+  colline.rotation.y = Math.PI;
+  const soleil = k.pl(.16,.16, .2,.14,-.045, k.m("tbl-s","#FFD93B"));
+  soleil.rotation.y = Math.PI;
+  return { sansOmbre:true };
+},
+
+/* ---------------- JARDIN ---------------- */
+tree(k){
+  k.c(.6,3.6, 0,1.8,0, k.m("ar-t","#FFFFFF","ecorce"), null, .42);
+  const v = k.m("ar-f","#FFFFFF","feuillage");
+  const c1 = k.s(3.4, 0,4.2,0, v); c1.scaling.y = .9;
+  k.s(2.2, -1.2,3.6,.6, v);
+  k.s(2, 1.3,3.8,-.5, v);
+  k.s(1.8, .3,5.2,.4, v);
+  /* quelques pommes */
+  for(let i=0;i<5;i++){
+    const a = Math.random()*7;
+    k.s(.22, Math.cos(a)*1.5, 3.6+Math.random()*1.4, Math.sin(a)*1.5, k.m("ar-p","#E03A3A"));
+  }
+  return { collision:[.9,3.4,.9,0], rayonOmbre:1.9 };
+},
+flower(k){
+  k.c(.05,.7, 0,.35,0, k.m("fl-t","#4C8A3F"));
+  const f1 = k.s(.3, -.12,.5,0, k.m("fl-f1","#4FA85C")); f1.scaling.set(1,.3,.6);
+  const f2 = k.s(.3, .12,.42,0, k.m("fl-f2","#4FA85C")); f2.scaling.set(1,.3,.6);
+  const petale = k.m("fl-p","#FF5D73");
+  for(let i=0;i<7;i++){
+    const a = i/7*Math.PI*2;
+    const p = k.s(.22, Math.cos(a)*.14, .76, Math.sin(a)*.14, petale);
+    p.scaling.y = .45;
+  }
+  k.s(.16, 0,.8,0, k.m("fl-c","#FFD93B"));
+  return { rayonOmbre:.3 };
+},
+grassTuft(k){
+  const v = k.m("he-t","#5FAE56");
+  const v2 = k.m("he-t2","#3F8E47");
+  for(let i=0;i<26;i++){
+    const a = Math.random()*7, r = Math.random()*.5;
+    const h = .3+Math.random()*.45;
+    const b = k.b(.05,h,.05, Math.cos(a)*r, h/2, Math.sin(a)*r, i%2 ? v : v2);
+    b.rotation.z = (Math.random()-.5)*.5; b.rotation.x = (Math.random()-.5)*.5;
+  }
+  const s = k.s(1.1, 0,.08,0, v); s.scaling.y = .18;
+  return { rayonOmbre:.6 };
+},
+bird(k, M){
+  const bleu = k.m("oi-c","#4FA3D8");
+  const corps = k.s(.3, 0,0,0, bleu); corps.scaling.set(1,.85,1.4);
+  k.s(.2, 0,.14,-.2, bleu);
+  k.c(.08,.12, 0,.14,-.33, k.m("oi-b","#FFC93C")).rotation.x = Math.PI/2;
+  k.s(.05, -.06,.18,-.28, k.m("oi-o","#1A1A20"));
+  k.s(.05, .06,.18,-.28, k.m("oi-o2","#1A1A20"));
+  const aileG = k.s(.26, -.14,.02,0, bleu); aileG.scaling.set(.3,.7,1.1);
+  const aileD = k.s(.26, .14,.02,0, bleu); aileD.scaling.set(.3,.7,1.1);
+  const queue = k.b(.16,.04,.3, 0,.02,.26, bleu);
+  /* battement d'ailes */
+  M.animations.push(t => {
+    const a = Math.sin(t*6)*.5;
+    aileG.rotation.z = -a; aileD.rotation.z = a;
+  });
+  return { sansOmbre:true };
+},
+dog(k, M){
+  const f = k.m("ch-f","#C98A4B");
+  const f2 = k.m("ch-f2","#8A5A2B");
+  const corps = k.s(.5, 0,.42,0, f); corps.scaling.set(1,.85,1.6);
+  const tete = k.s(.36, 0,.6,-.46, f);
+  k.c(.13,.2, 0,.56,-.68, f2).rotation.x = Math.PI/2;
+  k.s(.07, 0,.56,-.78, k.m("ch-n","#2A1A12"));
+  k.s(.05, -.1,.66,-.66, k.m("ch-y","#1A1A20"));
+  k.s(.05, .1,.66,-.66, k.m("ch-y2","#1A1A20"));
+  const oG = k.s(.2, -.18,.74,-.44, f2); oG.scaling.set(.4,1,.8);
+  const oD = k.s(.2, .18,.74,-.44, f2); oD.scaling.set(.4,1,.8);
+  [[-.16,-.26],[.16,-.26],[-.16,.3],[.16,.3]].forEach(([x,z]) => k.c(.12,.42,x,.21,z,f));
+  const queue = k.c(.08,.4, 0,.6,.42, f);
+  queue.rotation.x = -.7;
+  M.animations.push(t => { queue.rotation.z = Math.sin(t*7)*.5; });
+  return { collision:[.7,.9,1.3,0], rayonOmbre:.6 };
+},
+cat(k, M){
+  const g = k.m("ca-f","#8C8C94");
+  const corps = k.s(.4, 0,.3,0, g); corps.scaling.set(1,.8,1.5);
+  k.s(.28, 0,.48,-.34, g);
+  const oG = k.b(.14,.16,.04, -.1,.66,-.34, g); oG.rotation.z = -.3;
+  const oD = k.b(.14,.16,.04, .1,.66,-.34, g); oD.rotation.z = .3;
+  k.s(.05, -.08,.5,-.46, k.m("ca-y","#7BE0AD"));
+  k.s(.05, .08,.5,-.46, k.m("ca-y2","#7BE0AD"));
+  k.s(.05, 0,.44,-.48, k.m("ca-n","#E08A9A"));
+  [[-.13,-.18],[.13,-.18],[-.13,.22],[.13,.22]].forEach(([x,z]) => k.c(.1,.3,x,.15,z,g));
+  const q = k.c(.07,.6, 0,.46,.34, g);
+  q.rotation.x = -1.1;
+  M.animations.push(t => { q.rotation.z = Math.sin(t*2.2)*.4; });
+  return { collision:[.6,.7,1.1,0], rayonOmbre:.5 };
+},
+ball(k){
+  const b = k.s(.46, 0,.23,0, k.m("ba","#FFFFFF"));
+  const noir = k.m("ba2","#2A2A30");
+  for(let i=0;i<8;i++){
+    const a = i/8*Math.PI*2, b2 = i%2 ? .35 : -.1;
+    const p = k.s(.14, Math.cos(a)*.2, .23+b2, Math.sin(a)*.2, noir);
+    p.scaling.set(1,.4,1);
+  }
+  return { rayonOmbre:.3 };
+},
+swing(k, M){
+  const bois = k.m("bl-b","#FFFFFF","bois");
+  const metal = k.m("bl-m","#FFFFFF","metal",{brillant:.4});
+  /* portique : deux A renversés reliés par une barre */
+  [[-1.2,-.8],[-1.2,.8],[1.2,-.8],[1.2,.8]].forEach(([x,z]) => {
+    k.c(.12,2.55, x,1.27,z, metal);
+  });
+  [[-1.2],[1.2]].forEach(([x]) => k.b(.12,.12,1.7, x,2.5,0, metal));
+  k.c(.15,2.6, 0,2.5,0, metal).rotation.z = Math.PI/2;
+  /* la balançoire qui se balance */
+  const pivot = new BABYLON.TransformNode("pivot-bl", M.scene);
+  pivot.parent = k.parent; pivot.position.y = 2.5;
+  const cordeG = k.c(.04,1.6, -.4,-.8,0, metal); cordeG.parent = pivot;
+  const cordeD = k.c(.04,1.6, .4,-.8,0, metal); cordeD.parent = pivot;
+  const siege = k.b(.9,.08,.34, 0,-1.6,0, bois); siege.parent = pivot;
+  M.animations.push(t => { pivot.rotation.x = Math.sin(t*1.3)*.28; });
+  return { rayonOmbre:1 };
+},
+fencePost(k){
+  const m = k.m("cl2","#F0E6D2");
+  for(let i=0;i<4;i++){
+    k.b(.12,1.2,.1, i*.5,.6,0, m);
+    k.b(.12,.12,.1, i*.5,1.26,0, m).rotation.z = Math.PI/4;
+  }
+  k.b(1.8,.1,.12, .75,.9,0, m);
+  k.b(1.8,.1,.12, .75,.5,0, m);
+  return { collision:[1.9,1.2,.2,0], rayonOmbre:.8 };
+},
+snail(k, M){
+  const corps = k.s(.3, 0,.07,0, k.m("es-c","#C9A882"));
+  corps.scaling.set(.6,.5,1.5);
+  const coq = k.t(.26,.12, 0,.18,-.05, k.m("es-q","#B5693F"));
+  coq.rotation.x = Math.PI/2;
+  k.s(.14, 0,.1,.2, k.m("es-t","#C9A882"));
+  const aG = k.c(.02,.12, -.04,.2,.24, k.m("es-a","#C9A882"));
+  const aD = k.c(.02,.12, .04,.2,.24, k.m("es-a2","#C9A882"));
+  return { rayonOmbre:.2, sansOmbre:true };
+},
+wateringCan(k){
+  const m = k.m("ar-m","#7BE0AD",null,{brillant:.4});
+  k.c(.34,.42, 0,.21,0, m);
+  k.c(.3,.05, 0,.44,0, m);
+  const bec = k.c(.08,.5, .3,.34,0, m);
+  bec.rotation.z = -.9;
+  k.c(.14,.06, .5,.52,0, m);
+  const anse = k.t(.22,.035, -.18,.4,0, m); anse.rotation.y = Math.PI/2;
+  return { collision:[.4,.5,.4,0], rayonOmbre:.26 };
+},
+mushroom(k){
+  k.c(.16,.3, 0,.15,0, k.m("mu-p","#F2E8D8"), null, .2);
+  const ch = k.s(.6, 0,.32,0, k.m("mu-c","#D13A33"));
+  ch.scaling.y = .5;
+  for(let i=0;i<6;i++){
+    const a = i/6*Math.PI*2;
+    const p = k.s(.1, Math.cos(a)*.18, .42, Math.sin(a)*.18, k.m("mu-b","#FFFFFF"));
+    p.scaling.y = .3;
+  }
+  return { rayonOmbre:.3 };
+},
+
+/* ---------------- RUE ---------------- */
+car(k){
+  const rouge = k.m("vo-c","#D13A33",null,{brillant:.4});
+  const vitre = k.m("vo-v","#FFFFFF","vitrine",{brillant:.7,alpha:.75});
+  const noir = k.m("vo-p","#1A1A20");
+  k.b(1.9,.6,4, 0,.6,0, rouge);
+  k.b(1.7,.55,1.9, 0,1.1,-.2, rouge);
+  k.b(1.62,.42,1.8, 0,1.12,-.22, vitre);
+  [[-.85,-1.3],[.85,-1.3],[-.85,1.3],[.85,1.3]].forEach(([x,z]) => {
+    const r = k.c(.62,.26, x,.33,z, noir); r.rotation.z = Math.PI/2;
+    const j = k.c(.3,.28, x,.33,z, k.m("vo-j","#FFFFFF","metal",{brillant:.6}));
+    j.rotation.z = Math.PI/2;
+  });
+  k.s(.2, -.6,.7,-2.02, k.m("vo-ph","#FFF8C0",null,{emissive:"#6A5A18"}));
+  k.s(.2, .6,.7,-2.02, k.m("vo-ph2","#FFF8C0",null,{emissive:"#6A5A18"}));
+  k.b(.6,.14,.06, 0,.72,2.02, k.m("vo-f","#D13A33"));
+  return { collision:[2,1.5,4.1,0], rayonOmbre:1.6 };
+},
+bus(k){
+  const jaune = k.m("bu-c","#FFC93C",null,{brillant:.3});
+  const vitre = k.m("bu-v","#FFFFFF","vitrine",{brillant:.7,alpha:.75});
+  const noir = k.m("bu-p","#1A1A20");
+  k.b(2.5,2.4,7.6, 0,1.6,0, jaune);
+  k.b(2.54,.9,7, 0,2.2,0, vitre);
+  k.b(2.3,1,.1, 0,2.1,-3.82, vitre);
+  k.b(1,1.6,.1, .6,1.2,3.82, k.m("bu-por","#8ED6FF",null,{alpha:.7}));
+  [[-1.2,-2.4],[1.2,-2.4],[-1.2,2.2],[1.2,2.2]].forEach(([x,z]) => {
+    const r = k.c(.95,.36, x,.48,z, noir); r.rotation.z = Math.PI/2;
+  });
+  k.b(1.4,.3,.04, 0,2.9,-3.8, k.m("bu-dest","#1A1A20",null,{emissive:"#2A2A18"}));
+  k.b(2.52,.2,7.1, 0,.5,0, k.m("bu-b","#B58A1F"));
+  return { collision:[2.6,3,7.7,0], rayonOmbre:2.6 };
+},
+bike(k){
+  const cadre = k.m("ve-c","#4FA3D8",null,{brillant:.5});
+  const noir = k.m("ve-p","#1A1A20");
+  const metal = k.m("ve-m","#FFFFFF","metal",{brillant:.6});
+  [[0,-.55],[0,.55]].forEach(([x,z]) => {
+    const r = k.t(.68,.07, x,.34,z, noir); r.rotation.y = Math.PI/2;
+    for(let i=0;i<8;i++){
+      const a = i/8*Math.PI;
+      const ry = k.b(.012,.62,.012, x,.34,z, metal);
+      ry.rotation.x = a; ry.rotation.y = Math.PI/2;
+    }
+    k.c(.1,.06, x,.34,z, metal).rotation.z = Math.PI/2;
+  });
+  k.b(.05,.05,1, 0,.6,0, cadre);
+  const d1 = k.b(.05,.5,.05, 0,.48,-.4, cadre); d1.rotation.x = .4;
+  const d2 = k.b(.05,.5,.05, 0,.48,.3, cadre); d2.rotation.x = -.3;
+  k.c(.04,.5, 0,.6,-.52, metal).rotation.x = .25;
+  k.b(.46,.04,.04, 0,.86,-.58, metal);
+  const selle = k.s(.2, 0,.82,.28, noir); selle.scaling.set(.6,.3,1.3);
+  k.c(.24,.03, 0,.3,-.02, metal).rotation.z = Math.PI/2;
+  return { collision:[.4,1,1.4,0], rayonOmbre:.7 };
+},
+shop(k){
+  const brique = k.m("ma-b","#FFFFFF","brique");
+  const vitre = k.m("ma-v","#FFFFFF","vitrine",{brillant:.7});
+  k.b(6,3.6,4, 0,1.8,0, brique);
+  k.b(4.4,2,.14, 0,1.3,-2.04, vitre);
+  k.b(1,2.1,.14, 2,1.05,-2.04, k.m("ma-p","#FFFFFF","bois"));
+  /* auvent rayé */
+  for(let i=0;i<9;i++){
+    const a = k.b(.6,.14,1.4, -2.4+i*.6, 2.6,-2.6, k.m("ma-a"+(i%2), i%2 ? "#FF5D73" : "#FFF6E3"));
+    a.rotation.x = -.3;
+  }
+  /* enseigne */
+  k.b(4.6,.6,.12, 0,3.1,-2.06, k.m("ma-e","#3B1E54"));
+  for(let i=0;i<4;i++)
+    k.b(.3,.3,.04, -.9+i*.6, 3.1,-2.14, k.m("ma-l","#FFC93C",null,{emissive:"#5A4A10"}));
+  return { collision:[6,3.6,4,0], rayonOmbre:3 };
+},
+trafficLight(k, M){
+  const noir = k.m("fe-c","#2A2A30");
+  const metal = k.m("fe-m","#4A4A52");
+  k.c(.4,.12, 0,.06,0, metal);
+  k.c(.16,3.2, 0,1.6,0, metal);
+  k.b(.46,1.3,.4, 0,3.2,0, noir);
+  const rouge = k.s(.3, 0,3.6,-.2, k.m("fe-r","#D13A33",null,{emissive:"#5A1010"}));
+  const orange = k.s(.3, 0,3.2,-.2, k.m("fe-o","#4A3A10"));
+  const vert = k.s(.3, 0,2.8,-.2, k.m("fe-v","#1A3A20"));
+  [rouge,orange,vert].forEach(s => s.scaling.z = .5);
+  /* le feu change de couleur */
+  const allume = k.m("fe-on-r","#FF3A33",null,{emissive:"#FF2A22"});
+  const eteint = k.m("fe-off","#3A2A2A");
+  const allumeV = k.m("fe-on-v","#3AD96A",null,{emissive:"#22B04A"});
+  let phase = -1;
+  M.animations.push(t => {
+    const p = Math.floor(t/3) % 2;
+    if(p === phase) return; phase = p;
+    rouge.material = p === 0 ? allume : eteint;
+    vert.material  = p === 1 ? allumeV : eteint;
+  });
+  return { collision:[.5,3.9,.5,0], rayonOmbre:.4 };
+},
+doorStreet(k){
+  const bois = k.m("po-b","#FFFFFF","bois");
+  const cadre = k.m("po-c","#F2E8D8");
+  k.b(1.5,2.5,.2, 0,1.25,0, cadre);
+  k.b(1.1,2.1,.12, 0,1.05,-.12, bois);
+  k.b(.4,.5,.04, 0,1.9,-.19, k.m("po-v","#FFFFFF","vitrine",{brillant:.7}));
+  k.s(.12, .4,1.05,-.2, k.m("po-pg","#E8C27A","metal",{brillant:.7}));
+  k.b(1.7,.16,.4, 0,2.6,-.1, k.m("po-au","#B04A3A"));
+  k.b(1.4,.12,.3, 0,.06,-.2, k.m("po-ma","#8A8A90"));
+  return { collision:[1.5,2.5,.3,0], rayonOmbre:.8 };
+},
+bench(k){
+  const bois = k.m("ba-b","#FFFFFF","bois");
+  const metal = k.m("ba-m","#3F3F46");
+  for(let i=0;i<4;i++) k.b(1.9,.07,.12, 0,.45,-.2+i*.15, bois);
+  for(let i=0;i<3;i++) k.b(1.9,.07,.1, 0,.62+i*.17,.25, bois);
+  [[-.85],[.85]].forEach(([x]) => {
+    k.b(.09,.45,.6, x,.22,0, metal);
+    k.b(.09,.6,.08, x,.75,.27, metal);
+  });
+  return { collision:[2,.9,.7,0], rayonOmbre:1 };
+},
+truck(k){
+  const bleu = k.m("cm-c","#2A6FBF",null,{brillant:.4});
+  const gris = k.m("cm-r","#E8ECEF");
+  const noir = k.m("cm-p","#1A1A20");
+  const vitre = k.m("cm-v","#FFFFFF","vitrine",{brillant:.7,alpha:.75});
+  k.b(2.3,1.6,2.2, 0,1.2,-2.6, bleu);
+  k.b(2.1,.8,.12, 0,1.6,-3.7, vitre);
+  k.b(2.4,2.4,5, 0,1.7,.9, gris);
+  k.b(2.44,.3,5.04, 0,1.7,.9, k.m("cm-l","#2A6FBF"));
+  k.b(2.5,.3,7.4, 0,.5,-.3, k.m("cm-ch","#3A3A40"));
+  [[-1.1,-2.8],[1.1,-2.8],[-1.1,1],[1.1,1],[-1.1,2.1],[1.1,2.1]].forEach(([x,z]) => {
+    const r = k.c(.9,.34, x,.45,z, noir); r.rotation.z = Math.PI/2;
+  });
+  k.s(.2, -.7,.9,-3.72, k.m("cm-ph","#FFF8C0",null,{emissive:"#6A5A18"}));
+  k.s(.2, .7,.9,-3.72, k.m("cm-ph2","#FFF8C0",null,{emissive:"#6A5A18"}));
+  return { collision:[2.5,3,7.5,0], rayonOmbre:2.4 };
+},
+mailbox(k){
+  const bleu = k.m("bl-c","#2A6FBF",null,{brillant:.4});
+  k.c(.14,1, 0,.5,0, k.m("bl-p","#4A4A52"));
+  k.b(.6,.8,.46, 0,1.3,0, bleu);
+  const t = k.c(.6,.46, 0,1.7,0, bleu); t.rotation.z = Math.PI/2;
+  k.b(.44,.08,.03, 0,1.5,-.24, k.m("bl-f","#1A1A20"));
+  k.b(.3,.2,.02, 0,1.2,-.24, k.m("bl-l","#FFC93C"));
+  return { collision:[.6,1.9,.5,0], rayonOmbre:.4 };
+},
+streetLamp(k){
+  const metal = k.m("lm-m","#3F3F46");
+  k.c(.4,.2, 0,.1,0, metal);
+  k.c(.16,4.4, 0,2.2,0, metal);
+  const bras = k.b(.12,.12,1.2, 0,4.4,.5, metal);
+  bras.rotation.x = .3;
+  const lum = k.s(.44, 0,4.3,1.1, k.m("lm-l","#FFF6D0",null,{emissive:"#8A7A28"}));
+  lum.scaling.y = .6;
+  return { collision:[.4,4.6,.4,0], rayonOmbre:.4 };
+},
+bin(k){
+  const m = k.m("pb-c","#3F8E47",null,{brillant:.3});
+  k.c(.6,1, 0,.5,0, m, null, .68);
+  k.c(.72,.08, 0,1.04,0, k.m("pb-cv","#2A6B37"));
+  k.c(.24,.06, 0,1.1,0, k.m("pb-t","#2A6B37"));
+  for(let i=0;i<3;i++) k.c(.62,.04, 0,.3+i*.3,0, k.m("pb-b","#2A6B37"));
+  return { collision:[.7,1.1,.7,0], rayonOmbre:.4 };
+},
+sign(k){
+  const metal = k.m("pa-m","#8A8A90");
+  k.c(.1,2.4, 0,1.2,0, metal);
+  const p = k.b(.9,.7,.06, 0,2.1,0, k.m("pa-p","#FFFFFF"));
+  k.b(.96,.76,.03, 0,2.1,.04, k.m("pa-bd","#D13A33"));
+  k.b(.6,.14,.02, 0,2.1,-.04, k.m("pa-t","#3B1E54"));
+  return { collision:[.3,2.5,.3,0], rayonOmbre:.3 };
+},
+
+/* ---------------- PARC ---------------- */
+slide(k){
+  const metal = k.m("to-m","#FFFFFF","metal",{brillant:.6});
+  const rouge = k.m("to-r","#D13A33");
+  const jaune = k.m("to-j","#FFC93C");
+  /* plateforme */
+  k.b(1.4,.1,1.4, 0,2,0, k.m("to-pl","#8ED6FF"));
+  [[-.6,-.6],[.6,-.6],[-.6,.6],[.6,.6]].forEach(([x,z]) => k.c(.14,2,x,1,z,metal));
+  /* toit */
+  const toit = k.c(1.6,.7, 0,2.7,0, rouge, null, .1);
+  /* glissière */
+  const g = k.b(.9,.12,4.4, 0,1.1,2.4, jaune);
+  g.rotation.x = -.42;
+  const bG = k.b(.1,.4,4.4, -.48,1.22,2.4, rouge); bG.rotation.x = -.42;
+  const bD = k.b(.1,.4,4.4, .48,1.22,2.4, rouge); bD.rotation.x = -.42;
+  /* échelle */
+  for(let i=0;i<6;i++) k.b(.9,.07,.07, 0,.3+i*.32,-.75, metal);
+  [[-.45],[.45]].forEach(([x]) => {
+    const e = k.b(.08,2.2,.08, x,1.1,-.8, metal); e.rotation.x = .12;
+  });
+  return { collision:[1.5,2.4,1.5,0], rayonOmbre:1.4 };
+},
+duck(k, M){
+  const blanc = k.m("ca-b","#FFF8E8");
+  const orange = k.m("ca-o","#FF9F45");
+  const corps = k.s(.44, 0,.24,0, blanc); corps.scaling.set(1,.85,1.4);
+  k.s(.24, 0,.44,-.22, blanc);
+  k.c(.1,.18, 0,.42,-.38, orange).rotation.x = Math.PI/2;
+  k.s(.04, -.07,.5,-.3, k.m("ca-y3","#1A1A20"));
+  k.s(.04, .07,.5,-.3, k.m("ca-y4","#1A1A20"));
+  const q = k.s(.18, 0,.3,.28, blanc); q.scaling.set(.8,.6,1.2);
+  const aG = k.s(.3, -.2,.26,0, k.m("ca-a","#F2E8D8")); aG.scaling.set(.28,.7,1.1);
+  const aD = k.s(.3, .2,.26,0, k.m("ca-a2","#F2E8D8")); aD.scaling.set(.28,.7,1.1);
+  /* le canard flotte doucement */
+  M.animations.push(t => {
+    k.parent.position.y = Math.sin(t*1.6)*.04;
+    k.parent.rotation.y = Math.sin(t*.6)*.3;
+  });
+  return { rayonOmbre:.4, sansOmbre:true };
+},
+pond(k, M){
+  const eau = k.m("ma-e","#FFFFFF","eau",{ brillant:.6, alpha:.85 });
+  const bord = k.m("ma-b2","#9A9099","pave");
+  const disque = BABYLON.MeshBuilder.CreateDisc("mare", { radius:3.4, tessellation:32 }, M.scene);
+  disque.rotation.x = Math.PI/2; disque.position.y = .06; disque.material = eau;
+  disque.parent = k.parent;
+  /* bordure en pierres */
+  for(let i=0;i<22;i++){
+    const a = i/22*Math.PI*2;
+    const p = k.s(.6, Math.cos(a)*3.5, .1, Math.sin(a)*3.5, bord);
+    p.scaling.y = .4;
+  }
+  /* l'eau ondule */
+  M.animations.push(t => { disque.position.y = .06 + Math.sin(t*1.4)*.02; });
+  return { sansOmbre:true };
+},
+kite(k, M){
+  const toile = k.m("cv-t","#FF5D73");
+  const toile2 = k.m("cv-t2","#FFC93C");
+  const d1 = k.pl(1.1,1.1, 0,0,0, toile); d1.rotation.z = Math.PI/4;
+  const d2 = k.pl(1.1,1.1, 0,0,.02, toile2);
+  d2.rotation.z = Math.PI/4; d2.scaling.set(.5,.5,1);
+  k.b(.04,1.5,.02, 0,0,-.02, k.m("cv-b","#8A5A3B"));
+  k.b(1.5,.04,.02, 0,0,-.02, k.m("cv-b2","#8A5A3B"));
+  /* queue avec des noeuds */
+  for(let i=0;i<5;i++){
+    const n = k.b(.18,.1,.02, Math.sin(i)*.1, -.9-i*.3, 0,
+      k.m("cv-n"+(i%2), i%2 ? "#7BE0AD" : "#8ED6FF"));
+  }
+  /* le cerf-volant danse dans le vent */
+  const base = k.parent.position.clone();
+  M.animations.push(t => {
+    k.parent.position.x = base.x + Math.sin(t*.8)*1.6;
+    k.parent.position.y = base.y + Math.sin(t*1.1)*.6;
+    k.parent.rotation.z = Math.sin(t*.9)*.3;
+  });
+  return { sansOmbre:true };
+},
+iceCream(k){
+  const cornet = k.m("gl-c","#D9A05B");
+  const c = k.c(.3,.6, 0,.3,0, cornet, null, .04);
+  c.rotation.x = Math.PI;        /* pointe vers le bas */
+  k.s(.34, 0,.68,0, k.m("gl-f","#FFB6C1"));
+  k.s(.3, -.1,.88,.04, k.m("gl-f2","#FFF8E8"));
+  k.s(.28, .12,.98,-.04, k.m("gl-f3","#8A5A3B"));
+  k.s(.1, 0,1.14,0, k.m("gl-ce","#D13A33"));
+  return { rayonOmbre:.3 };
+},
+butterfly(k, M){
+  const corps = k.m("pp-c","#3B1E54");
+  k.c(.07,.3, 0,0,0, corps).rotation.x = Math.PI/2;
+  k.s(.1, 0,.03,-.16, corps);
+  const aile = k.m("pp-a","#FF9F45");
+  const aile2 = k.m("pp-a2","#C86BC8");
+  const gH = k.pl(.34,.3, -.18,.04,-.04, aile);
+  const gB = k.pl(.26,.22, -.15,-.04,.08, aile2);
+  const dH = k.pl(.34,.3, .18,.04,-.04, aile);
+  const dB = k.pl(.26,.22, .15,-.04,.08, aile2);
+  [gH,gB].forEach(a => a.rotation.y = -.5);
+  [dH,dB].forEach(a => a.rotation.y = .5);
+  /* battement + petit vol circulaire */
+  const base = k.parent.position.clone();
+  M.animations.push(t => {
+    const b = Math.sin(t*9)*.6;
+    [gH,gB].forEach(a => a.rotation.y = -.5 - b);
+    [dH,dB].forEach(a => a.rotation.y = .5 + b);
+    k.parent.position.x = base.x + Math.cos(t*.5)*1.4;
+    k.parent.position.z = base.z + Math.sin(t*.5)*1.4;
+    k.parent.position.y = base.y + Math.sin(t*1.7)*.3;
+    k.parent.rotation.y = -t*.5;
+  });
+  return { sansOmbre:true };
+},
+sunDisc(k, M){
+  const m = k.m("so","#FFE066",null,{ emissive:"#FFD033" });
+  const s = k.s(3.2, 0,0,0, m);
+  const halo = k.s(4.4, 0,0,0, k.m("so-h","#FFE9A0",null,{ emissive:"#8A7A20", alpha:.35 }));
+  /* rayons */
+  for(let i=0;i<12;i++){
+    const a = i/12*Math.PI*2;
+    const r = k.b(.3,1.6,.3, Math.cos(a)*2.6, Math.sin(a)*2.6, 0, m);
+    r.rotation.z = a - Math.PI/2;
+  }
+  M.animations.push(t => { k.parent.rotation.z = t*.15; });
+  return { sansOmbre:true };
+},
+balloon(k, M){
+  const m = k.m("bb","#D13A33",null,{ brillant:.6 });
+  const b = k.s(.7, 0,1.9,0, m); b.scaling.y = 1.25;
+  k.c(.1,.14, 0,1.46,0, m);
+  /* ficelle */
+  const f = k.c(.02,1.4, 0,.7,0, k.m("bb-f","#FFF6E3"));
+  k.b(.3,.3,.3, 0,.15,0, k.m("bb-p","#8ED6FF"));
+  M.animations.push(t => {
+    k.parent.rotation.z = Math.sin(t*1.1)*.12;
+    k.parent.position.y = Math.sin(t*1.5)*.06;
+  });
+  return { rayonOmbre:.3 };
+},
+fountain(k, M){
+  const pierre = k.m("fo-p","#C9C2B8","pave");
+  const eau = k.m("fo-e","#FFFFFF","eau",{ alpha:.85, brillant:.6 });
+  k.c(4.4,.5, 0,.25,0, pierre);
+  k.c(3.8,.3, 0,.52,0, eau);
+  k.c(1.2,1.2, 0,.6,0, pierre);
+  k.c(.6,.8, 0,1.5,0, pierre, null, .3);
+  const coupe = k.c(1.8,.2, 0,1.9,0, pierre);
+  k.c(1.6,.12, 0,1.98,0, eau);
+  /* jet d'eau en particules (qualité haute seulement) */
+  if(Qualite.niveau() === "haute"){
+    try{
+      const sys = new BABYLON.ParticleSystem("jet", 420, M.scene);
+      sys.particleTexture = Tex.faire("goutte", (c,S) => {
+        const g = c.createRadialGradient(S/2,S/2,0,S/2,S/2,S/2);
+        g.addColorStop(0,"rgba(255,255,255,1)");
+        g.addColorStop(1,"rgba(180,220,255,0)");
+        c.fillStyle = g; c.fillRect(0,0,S,S);
+      });
+      sys.emitter = k.parent.position.add(new BABYLON.Vector3(0,2.1,0));
+      sys.minEmitBox = new BABYLON.Vector3(-.1,0,-.1);
+      sys.maxEmitBox = new BABYLON.Vector3(.1,0,.1);
+      sys.color1 = new BABYLON.Color4(.8,.95,1,.9);
+      sys.color2 = new BABYLON.Color4(.6,.85,1,.7);
+      sys.colorDead = new BABYLON.Color4(.7,.9,1,0);
+      sys.minSize = .08; sys.maxSize = .22;
+      sys.minLifeTime = .5; sys.maxLifeTime = 1.1;
+      sys.emitRate = 220;
+      sys.gravity = new BABYLON.Vector3(0,-9.8,0);
+      sys.direction1 = new BABYLON.Vector3(-.6,4,-.6);
+      sys.direction2 = new BABYLON.Vector3(.6,5,.6);
+      sys.start();
+    }catch(e){}
+  }
+  return { collision:[4.4,1,4.4,0], rayonOmbre:2.4 };
+},
+frog(k, M){
+  const v = k.m("gr-c","#5FAE56");
+  const corps = k.s(.44, 0,.2,0, v); corps.scaling.set(1,.7,1.3);
+  k.s(.2, -.13,.36,-.1, v); k.s(.2,.13,.36,-.1, v);
+  k.s(.1, -.13,.4,-.14, k.m("gr-y","#FFF8E8"));
+  k.s(.1, .13,.4,-.14, k.m("gr-y2","#FFF8E8"));
+  k.s(.05, -.13,.42,-.2, k.m("gr-p","#1A1A20"));
+  k.s(.05, .13,.42,-.2, k.m("gr-p2","#1A1A20"));
+  [[-.22,.18],[.22,.18]].forEach(([x,z]) => {
+    const p = k.s(.22, x,.1,z, v); p.scaling.set(.7,.5,1.1);
+  });
+  /* petits sauts */
+  M.animations.push(t => {
+    const c = t % 3;
+    k.parent.position.y = c < .4 ? Math.sin(c/.4*Math.PI)*.4 : 0;
+  });
+  return { rayonOmbre:.3 };
+},
+bee(k, M){
+  const j = k.m("ab-j","#FFC93C");
+  const n = k.m("ab-n","#2A2A30");
+  const corps = k.s(.3, 0,0,0, j); corps.scaling.set(1,.9,1.5);
+  for(let i=0;i<3;i++){
+    const b = k.c(.3,.05, 0,0,-.08+i*.09, n); b.rotation.x = Math.PI/2;
+  }
+  k.s(.2, 0,.03,-.2, n);
+  k.s(.04, -.05,.07,-.26, k.m("ab-y","#FFFFFF"));
+  k.s(.04, .05,.07,-.26, k.m("ab-y2","#FFFFFF"));
+  const aile = k.m("ab-a","#FFFFFF",null,{ alpha:.55 });
+  const aG = k.pl(.26,.16, -.14,.14,0, aile);
+  const aD = k.pl(.26,.16, .14,.14,0, aile);
+  const base = k.parent.position.clone();
+  M.animations.push(t => {
+    aG.rotation.y = Math.sin(t*26)*.8; aD.rotation.y = -Math.sin(t*26)*.8;
+    k.parent.position.x = base.x + Math.cos(t*1.3)*1.1;
+    k.parent.position.z = base.z + Math.sin(t*1.6)*1.1;
+    k.parent.position.y = base.y + Math.sin(t*2.4)*.25;
+  });
+  return { sansOmbre:true };
+},
+umbrella(k){
+  const mat = k.m("ps-m","#A9A2A0","metal",{brillant:.5});
+  k.c(.5,.12, 0,.06,0, k.m("ps-s","#6B6B70"));
+  k.c(.08,2.4, 0,1.2,0, mat);
+  const couleurs = ["#FF5D73","#FFF6E3","#7BE0AD","#FFF6E3","#8ED6FF","#FFF6E3"];
+  for(let i=0;i<6;i++){
+    const a = i/6*Math.PI*2;
+    const p = k.b(1.7,.06,.9, Math.cos(a)*.85, 2.3, Math.sin(a)*.85,
+      k.m("ps-t"+i, couleurs[i]));
+    p.rotation.y = -a; p.rotation.z = .22;
+  }
+  k.s(.16, 0,2.5,0, k.m("ps-h","#FFC93C"));
+  return { collision:[.4,2.5,.4,0], rayonOmbre:1.3 };
+},
+
+/* ---------------- OBJET DE SECOURS ---------------- */
+_defaut(k){
+  k.b(.5,.5,.5, 0,.25,0, k.m("def","#FF9F45"));
+  k.s(.3, 0,.6,0, k.m("def2","#FFC93C"));
+  return { rayonOmbre:.4 };
+}
+};
+
+/* ===================================================================
+   G. LES CONTRÔLES
+   -------------------------------------------------------------------
+   Ordinateur : flèches + ZQSD + WASD, clic maintenu pour regarder,
+                clic sur le sol pour s'y rendre.
+   Tactile    : un joystick (avancer / reculer / tourner), glisser
+                un doigt ailleurs pour regarder, toucher le sol.
+   =================================================================== */
+const Controles = {
+  touches:{}, cible:null, actifs:false,
+
+  init(){
+    /* --- Clavier --- */
+    window.addEventListener("keydown", e => {
+      this.touches[e.code] = true;
+      if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Space"].includes(e.code)) e.preventDefault();
+    });
+    window.addEventListener("keyup", e => { this.touches[e.code] = false; });
+    window.addEventListener("blur", () => { this.touches = {}; });
+
+    /* --- Bascule automatique souris / doigt --- */
+    window.addEventListener("pointerdown", e => {
+      if(e.pointerType === "touch") this.montrerJoystick(true);
+      else if(e.pointerType === "mouse") this.montrerJoystick(false);
+    }, true);
+
+    Joystick.init();
+  },
+
+  montrerJoystick(oui){
+    const j = document.getElementById("joystick");
+    j.classList.toggle("visible", !!oui && Jeu.enCours);
+    j.classList.toggle("droite", !!Progres.r.joystickDroite);
+  },
+
+  /* Brancher / débrancher les contrôles (on les coupe pendant les défis) */
+  activer(oui){
+    this.actifs = oui;
+    const cam = Monde.camera, canvas = document.getElementById("vue3d");
+    if(!cam) return;
+    if(oui){
+      cam.attachControl(canvas, true);
+      /* Le clavier est géré entièrement par Controles.mettreAJour,
+         on désactive donc le déplacement automatique de Babylon. */
+      cam.keysUp = []; cam.keysDown = []; cam.keysLeft = []; cam.keysRight = [];
+      this.montrerJoystick(Appareil.tactile);
+    }else{
+      cam.detachControl();
+      document.getElementById("joystick").classList.remove("visible");
+      this.cible = null;
+    }
+  },
+
+  /* Marcher automatiquement vers un point du sol */
+  allerVers(point){
+    if(!this.actifs) return;
+    this.cible = point.clone();
+    this.cible.y = Monde.camera.position.y;
+  },
+
+  /* Appelé à chaque image */
+  mettreAJour(dt){
+    const cam = Monde.camera;
+    if(!cam || !this.actifs) return;
+    const vitesse = 2.4;         /* marche lente */
+
+    /* -- Flèches : avancer / reculer / tourner -- */
+    const t = this.touches;
+    let avance = 0, tourne = 0;
+    if(t.ArrowUp || t.KeyW || t.KeyZ) avance += 1;
+    if(t.ArrowDown || t.KeyS) avance -= .6;
+    if(t.ArrowLeft || t.KeyA || t.KeyQ) tourne -= 1;
+    if(t.ArrowRight || t.KeyD) tourne += 1;
+
+    /* -- Joystick tactile -- */
+    if(Joystick.actif){
+      avance += Joystick.y > 0 ? Joystick.y : Joystick.y * .6;
+      tourne += Joystick.x;
+      this.cible = null;
+    }
+
+    if(tourne) cam.rotation.y += tourne * 1.6 * dt;
+
+    if(avance){
+      const dir = cam.getDirection(BABYLON.Axis.Z);
+      dir.y = 0; dir.normalize();
+      cam.cameraDirection.addInPlace(dir.scale(avance * vitesse * dt));
+      this.cible = null;
+    }
+
+    /* -- Marche automatique vers le point touché -- */
+    if(this.cible){
+      const d = this.cible.subtract(cam.position); d.y = 0;
+      const dist = d.length();
+      if(dist < .9){ this.cible = null; }
+      else{
+        d.normalize();
+        cam.cameraDirection.addInPlace(d.scale(vitesse * .9 * dt));
+        /* on tourne doucement vers la cible */
+        const angle = Math.atan2(d.x, d.z);
+        let diff = angle - cam.rotation.y;
+        while(diff > Math.PI) diff -= Math.PI*2;
+        while(diff < -Math.PI) diff += Math.PI*2;
+        cam.rotation.y += Math.max(-2*dt, Math.min(2*dt, diff));
+      }
+    }
+
+    /* Sécurité : on reste à hauteur d'enfant, jamais de chute */
+    cam.position.y = 1.25;
+  }
+};
+
+/* ---------- Le joystick virtuel ---------- */
+const Joystick = {
+  actif:false, x:0, y:0, pointerId:null, rayon:50,
+
+  init(){
+    const base = document.getElementById("joystick");
+    const pouce = document.getElementById("joystick-pouce");
+    const rect = () => base.getBoundingClientRect();
+
+    const bouger = e => {
+      if(this.pointerId !== e.pointerId) return;
+      const r = rect();
+      const cx = r.left + r.width/2, cy = r.top + r.height/2;
+      let dx = (e.clientX - cx) / (r.width/2);
+      let dy = (cy - e.clientY) / (r.height/2);
+      const d = Math.hypot(dx,dy);
+      if(d > 1){ dx /= d; dy /= d; }
+      /* zone morte de 20 % au centre */
+      const zm = .2;
+      const amp = Math.hypot(dx,dy);
+      if(amp < zm){ this.x = 0; this.y = 0; }
+      else{
+        const k = (amp - zm) / (1 - zm) / amp;
+        this.x = dx * k; this.y = dy * k;
+      }
+      pouce.style.transform = `translate(${dx*this.rayon*.7}px, ${-dy*this.rayon*.7}px)`;
+      e.preventDefault();
+    };
+    const lacher = e => {
+      if(this.pointerId !== e.pointerId) return;
+      this.actif = false; this.x = 0; this.y = 0; this.pointerId = null;
+      pouce.style.transform = "";
+    };
+
+    base.addEventListener("pointerdown", e => {
+      this.actif = true; this.pointerId = e.pointerId;
+      try{ base.setPointerCapture(e.pointerId); }catch(err){}
+      bouger(e);
+    });
+    base.addEventListener("pointermove", bouger);
+    base.addEventListener("pointerup", lacher);
+    base.addEventListener("pointercancel", lacher);
+    base.addEventListener("lostpointercapture", lacher);
+  }
+};
+
+/* ===================================================================
+   H. LE DÉROULÉ DU JEU
+   =================================================================== */
+const Jeu = {
+  zone:null, enCours:false, defi:null, phrases:null,
+  motActuel:null, essais:3, ecoutePhrase:null,
+
+  /* ---------- Ouvrir une zone ---------- */
+  async ouvrirZone(id){
+    const zone = zoneParId(id);
+    if(!zone) return;
+    this.zone = zone; this.enCours = true;
+
+    UI.montrerEcran("jeu");
+    if(Monde.engine) Monde.engine.resize();
+    UI.chargement(true, "Construction de " + zone.nom + "…");
+    await pause(60);                       /* laisse l'écran s'afficher */
+
+    try{ Monde.construire(zone); }
+    catch(e){
+      console.error(e);
+      UI.chargement(false);
+      alert("Le lieu n'a pas pu être construit. Détail : " + e.message);
+      return;
+    }
+
+    /* Boucle de contrôle */
+    Monde.scene.onBeforeRenderObservable.add(() => {
+      Controles.mettreAJour(Monde.engine.getDeltaTime()/1000);
+    });
+
+    Controles.activer(true);
+    UI.chargement(false);
+    UI.majHUD();
+
+    const p = Progres.zone(zone.id);
+    if(p.fini && Monde.porte) Monde.ouvrirPorte();
+
+    const reste = this.motsRestants().length;
+    UI.hoot(reste
+      ? `Trouve les ${reste} objets entourés en rouge 🔴 et touche-les !`
+      : "Tout est découvert ! Appuie sur 🎤 Le défi !", true);
+    this.verifierDefi();
+  },
+
+  motsRestants(){
+    const p = Progres.zone(this.zone.id);
+    return this.zone.mots.filter(m => !p.decouverts.includes(m.en));
+  },
+
+  /* ---------- L'enfant touche un objet ---------- */
+  async toucherObjet(mot, node){
+    if(!this.enCours) return;
+    Monde.rebondir(node);
+
+    const p = Progres.zone(this.zone.id);
+    const nouveau = !p.decouverts.includes(mot.en);
+    if(nouveau){
+      p.decouverts.push(mot.en);
+      Progres.sauver();
+      Monde.surligner(node, "fait");
+      node.metadata.decouvert = true;
+    }
+
+    UI.carteMot(mot);
+    UI.majHUD();
+    /* On dit le mot en anglais, puis sa traduction en français */
+    await Voix.direMot(mot);
+    this.verifierDefi();
+  },
+
+  /* ---------- Tous les mots sont trouvés ? ---------- */
+  verifierDefi(){
+    const pret = this.motsRestants().length === 0;
+    document.getElementById("btn-defi").classList.toggle("visible", pret && this.enCours);
+    if(pret && !Progres.zone(this.zone.id).fini)
+      UI.hoot("Bravo ! Appuie sur 🎤 Le défi !", true);
+  },
+
+  /* ---------- Le défi : les mots ---------- */
+  lancerDefi(){
+    const p = Progres.zone(this.zone.id);
+    const bonusDecouverts = (this.zone.bonus || [])
+      .filter(b => p.decouverts.includes(b.en))
+      .map(b => ({ ...b, bonus:true }));
+
+    this.defi = {
+      liste: this.zone.mots.concat(bonusDecouverts),
+      index: 0, reussis: [], rates: [], bullesBonus: 0
+    };
+    this.verrou = false;
+    Controles.activer(false);
+    UI.fermerCarteMot();
+    document.getElementById("btn-defi").classList.remove("visible");
+    this.motSuivant();
+  },
+
+  async motSuivant(){
+    const d = this.defi;
+    if(d.index >= d.liste.length){ this.finDesMots(); return; }
+    this.motActuel = d.liste[d.index];
+    this.essais = 3; this.verrou = false;
+    UI.panneauDefi(this.motActuel, 3, d.index, d.liste.length);
+    UI.ouvrirPanneau("panneau-defi");
+    await pause(250);
+    await Voix.direMot(this.motActuel);
+  },
+
+  /* L'enfant appuie sur le micro */
+  async ecouterMot(){
+    const mot = this.motActuel;
+    if(!mot) return;
+    UI.microEcoute(true, "defi");
+    UI.texteEcoute("defi", "J'écoute… 👂");
+
+    const res = await Micro.ecouter(mot, txt => UI.texteEcoute("defi", "J'ai entendu : " + txt));
+    UI.microEcoute(false, "defi");
+
+    if(res.success === null){           /* pas de micro : l'adulte valide */
+      UI.validationAdulte(true, "defi");
+      UI.texteEcoute("defi", "Un adulte écoute et valide 👂");
+      return;
+    }
+    this.jugerMot(res.success, res.heard);
+  },
+
+  async jugerMot(reussi, entendu){
+    /* Verrou : un double-appui ne doit pas compter le mot deux fois */
+    if(this.verrou || !this.motActuel) return;
+    this.verrou = true;
+    const mot = this.motActuel, d = this.defi;
+    UI.validationAdulte(false, "defi");
+    if(reussi){
+      UI.texteEcoute("defi", "⭐ Oui ! " + mot.en);
+      if(mot.bonus){ d.bullesBonus++; }
+      else{ d.reussis.push(mot.en); Progres.retirerARevoir(mot.en); }
+      await Voix.dire(["Great job!","Well done!","Perfect!"][Math.floor(Math.random()*3)], "en", { rate:.95 });
+      d.index++;
+      await pause(220);
+      this.verrou = false;
+      this.motSuivant();
+      return;
+    }
+    this.essais--;
+    UI.coeurs("defi", this.essais);
+    if(this.essais > 0){
+      UI.texteEcoute("defi", entendu ? `J'ai entendu « ${entendu} ». Essaie encore 💪` : "Je n'ai pas bien entendu 💪");
+      await Voix.dire("Try again!", "en", { rate:.95 });
+      await pause(150);
+      await Voix.direMot(mot, false);
+      this.verrou = false;
+    }else{
+      UI.texteEcoute("defi", "Écoute bien : " + mot.en);
+      if(!mot.bonus){ d.rates.push(mot.en); Progres.ajouterARevoir(mot.en); }
+      await Voix.direMot(mot);
+      d.index++;
+      await pause(250);
+      this.verrou = false;
+      this.motSuivant();
+    }
+  },
+
+  /* ---------- Les mots sont finis : on passe aux phrases ---------- */
+  finDesMots(){
+    const d = this.defi;
+    const total = this.zone.mots.length;
+    const taux = total ? d.reussis.length / total * 100 : 0;
+    d.taux = taux;
+    d.valide = taux >= Progres.r.seuil;
+
+    const nb = this.nombreDePhrases();
+    if(d.valide && nb > 0){
+      this.lancerPhrases(nb);
+    }else{
+      this.afficherResultat();
+    }
+  },
+
+  nombreDePhrases(){
+    const r = Progres.r.nbPhrases;
+    if(r === "0") return 0;
+    if(r === "2") return 2;
+    if(r === "3") return 3;
+    /* Auto : 2 dans les pièces de la maison, 3 ailleurs */
+    return this.zone.lieu === "house" ? 2 : 3;
+  },
+
+  lancerPhrases(nb){
+    const dispo = (this.zone.phrases || []).slice();
+    /* tirage au hasard */
+    for(let i = dispo.length-1; i > 0; i--){
+      const j = Math.floor(Math.random()*(i+1));
+      [dispo[i], dispo[j]] = [dispo[j], dispo[i]];
+    }
+    this.phrases = { liste: dispo.slice(0, nb), index:0, reussies:0 };
+    UI.fermerPanneau("panneau-defi");
+    this.phraseSuivante();
+  },
+
+  async phraseSuivante(){
+    const f = this.phrases;
+    if(!f || f.index >= f.liste.length){ this.afficherResultat(); return; }
+    const phrase = f.liste[f.index];
+    this.essais = 3; this.verrou = false;
+    UI.panneauPhrase(phrase, 3);
+    UI.ouvrirPanneau("panneau-phrase");
+    await pause(250);
+    /* On lit la phrase en anglais PUIS sa traduction française */
+    await Voix.direPhrase(phrase);
+  },
+
+  async ecouterPhrase(){
+    const f = this.phrases;
+    if(!f) return;
+    const phrase = f.liste[f.index];
+    UI.microEcoute(true, "phrase");
+    UI.texteEcoute("phrase", "J'écoute… 👂");
+
+    const res = await Micro.ecouter(phrase, txt => UI.texteEcoute("phrase", "J'ai entendu : " + txt));
+    UI.microEcoute(false, "phrase");
+
+    if(res.success === null){
+      UI.validationAdulte(true, "phrase");
+      UI.texteEcoute("phrase", "Un adulte écoute et valide 👂");
+      return;
+    }
+    /* Les mots reconnus passent au vert, même en cas d'échec */
+    UI.allumerMots(res.hits || []);
+    this.jugerPhrase(res.success, res.heard);
+  },
+
+  async jugerPhrase(reussi, entendu){
+    if(this.verrou || !this.phrases) return;
+    this.verrou = true;
+    const f = this.phrases;
+    const phrase = f.liste[f.index];
+    UI.validationAdulte(false, "phrase");
+
+    if(reussi){
+      UI.allumerMots(normaliser(phrase.en).split(" "));
+      UI.texteEcoute("phrase", "💬 Super phrase !");
+      f.reussies++;
+      Progres.donnees.phrasesOk = (Progres.donnees.phrasesOk||0) + 1;
+      Progres.sauver();
+      await Voix.dire("Excellent!", "en", { rate:.95 });
+      f.index++;
+      await pause(250);
+      this.verrou = false;
+      this.phraseSuivante();
+      return;
+    }
+    this.essais--;
+    UI.coeurs("phrase", this.essais);
+    if(this.essais > 0){
+      UI.texteEcoute("phrase", entendu ? `J'ai entendu « ${entendu} ». Encore une fois 💪` : "Encore une fois 💪");
+      await pause(150);
+      await Voix.direPhrase(phrase, false);
+      this.verrou = false;
+    }else{
+      UI.texteEcoute("phrase", "Écoute bien le modèle 👂");
+      await Voix.direPhrase(phrase);
+      f.index++;
+      await pause(250);
+      this.verrou = false;
+      this.phraseSuivante();   /* une phrase ratée ne bloque jamais */
+    }
+  },
+
+  passerLesPhrases(){
+    if(this.phrases) this.phrases.index = this.phrases.liste.length;
+    UI.fermerPanneau("panneau-phrase");
+    this.afficherResultat();
+  },
+
+  /* ---------- Le score ---------- */
+  afficherResultat(){
+    UI.fermerPanneau("panneau-defi");
+    UI.fermerPanneau("panneau-phrase");
+
+    const d = this.defi, f = this.phrases;
+    const total = this.zone.mots.length;
+    const taux = d.taux != null ? d.taux : 0;
+    const etoiles = taux >= 95 ? 3 : taux >= 80 ? 2 : taux >= Progres.r.seuil ? 1 : 0;
+    const bulles = (f ? f.reussies : 0) + (d.bullesBonus || 0);
+
+    const p = Progres.zone(this.zone.id);
+    p.etoiles = Math.max(p.etoiles || 0, etoiles);
+    p.bulles = (p.bulles || 0) + bulles;
+    if(d.valide) p.fini = true;
+    Progres.sauver();
+
+    /* On débloque la zone suivante */
+    let suivante = null;
+    if(d.valide){
+      const i = indexZone(this.zone.id);
+      suivante = ZONES[i+1] ? ZONES[i+1].id : null;
+      if(suivante) Progres.debloquer(suivante);
+      if(Monde.porte) Monde.ouvrirPorte();
+    }
+
+    UI.panneauResultat({
+      valide: d.valide, etoiles, bulles, taux,
+      reussis: d.reussis.length, total,
+      rates: d.rates, suivante
+    });
+
+    if(d.valide) Voix.direHoot("Bravo, la porte est ouverte !");
+    else Voix.direHoot("Bien essayé ! Réécoute les mots et recommence.");
+  },
+
+  /* ---------- Passer la porte ---------- */
+  passerLaPorte(){
+    const i = indexZone(this.zone.id);
+    const suivante = ZONES[i+1];
+    if(!suivante){ UI.montrerEcran("carte"); UI.majCarte(); return; }
+    if(!Progres.estDebloque(suivante.id)){
+      UI.hoot("Fais le défi 🎤 pour ouvrir la porte !", true);
+      return;
+    }
+    this.ouvrirZone(suivante.id);
+  },
+
+  quitter(){
+    this.enCours = false;
+    Controles.activer(false);
+    Micro.arreter(); Voix.arreter();
+    UI.fermerPanneau("panneau-defi");
+    UI.fermerPanneau("panneau-phrase");
+    UI.fermerPanneau("panneau-resultat");
+    UI.montrerEcran("carte");
+    UI.majCarte();
+  }
+};
+
+/* ===================================================================
+   I. L'INTERFACE
+   =================================================================== */
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+
+const UI = {
+  minuteurHoot:null,
+
+  /* ---------- Écrans ---------- */
+  montrerEcran(nom){
+    $$(".ecran").forEach(e => e.classList.remove("actif"));
+    $("#jeu").classList.remove("actif");
+    if(nom === "titre") $("#ecran-titre").classList.add("actif");
+    if(nom === "carte") $("#ecran-carte").classList.add("actif");
+    if(nom === "jeu")   $("#jeu").classList.add("actif");
+  },
+  chargement(oui, texte){
+    $("#chargement").classList.toggle("cache", !oui);
+    if(texte) $("#texte-chargement").textContent = texte;
+  },
+  progres(p){ $("#barre-progres div").style.width = Math.round(p*100) + "%"; },
+
+  ouvrirPanneau(id){
+    $("#"+id).classList.add("actif");
+    Controles.activer(false);
+  },
+  fermerPanneau(id){ $("#"+id).classList.remove("actif"); },
+
+  /* ---------- Hoot la mascotte ---------- */
+  hoot(texte, lire){
+    const h = $("#hoot");
+    $("#hoot-bulle").textContent = texte;
+    h.classList.add("visible", "parle");
+    clearTimeout(this.minuteurHoot);
+    this.minuteurHoot = setTimeout(() => h.classList.remove("visible","parle"), 6500);
+    if(lire) Voix.direHoot(texte.replace(/[🔴🎤🗺️💬⭐👂💪🔍]/g,""));
+  },
+
+  /* ---------- Barre du haut ---------- */
+  majHUD(){
+    const z = Jeu.zone; if(!z) return;
+    const p = Progres.zone(z.id);
+    const trouves = z.mots.filter(m => p.decouverts.includes(m.en)).length;
+    const bonusTrouves = (z.bonus||[]).filter(m => p.decouverts.includes(m.en)).length;
+    $("#nom-zone").textContent = z.nom;
+    let txt = `🔍 ${trouves} / ${z.mots.length}`;
+    if(Progres.r.bonusActifs && (z.bonus||[]).length)
+      txt += ` · ⭐ ${bonusTrouves} / ${z.bonus.length}`;
+    $("#compteur").textContent = txt;
+  },
+
+  /* ---------- Carte du mot découvert ---------- */
+  carteMot(mot){
+    const c = $("#carte-mot");
+    c.querySelector(".vignette").textContent = mot.emo || "✨";
+    c.querySelector(".en").textContent = mot.en;
+    c.querySelector(".fr").textContent = mot.fr;
+    c.classList.add("visible");
+    this.motAffiche = mot;
+    clearTimeout(this._tCarte);
+    this._tCarte = setTimeout(() => c.classList.remove("visible"), 7000);
+  },
+  fermerCarteMot(){ $("#carte-mot").classList.remove("visible"); },
+
+  /* ---------- Panneau du défi : les mots ---------- */
+  panneauDefi(mot, coeurs, i, total){
+    $("#defi-titre").textContent = mot.bonus ? "Mot bonus ⭐" : `Dis le mot ! (${i+1}/${total})`;
+    $("#defi-vignette").textContent = mot.emo || "❓";
+    $("#defi-consigne").textContent = mot.bonus
+      ? "Celui-ci est en bonus, pour le plaisir !" : "Qu'est-ce que c'est ?";
+    this.coeurs("defi", coeurs);
+    this.texteEcoute("defi", "");
+    this.validationAdulte(!Micro.dispo || Progres.r.validationAdulte, "defi");
+  },
+  coeurs(quel, n){
+    const el = quel === "defi" ? $("#defi-coeurs") : $("#phrase-coeurs");
+    el.textContent = "❤️".repeat(Math.max(0,n)) + "🖤".repeat(Math.max(0,3-n));
+  },
+  texteEcoute(quel, t){
+    (quel === "defi" ? $("#defi-ecoute") : $("#phrase-ecoute")).textContent = t;
+  },
+  microEcoute(oui, quel){
+    const b = quel === "defi" ? $("#micro") : $("#micro-phrase");
+    b.classList.toggle("ecoute", oui);
+    b.textContent = oui ? "👂" : "🎤";
+    b.disabled = oui;
+  },
+  validationAdulte(oui, quel){
+    const el = quel === "defi" ? $("#validation-adulte") : $("#validation-adulte-phrase");
+    el.style.display = oui ? "flex" : "none";
+  },
+
+  /* ---------- Panneau des phrases ---------- */
+  panneauPhrase(phrase, coeurs){
+    const zone = $("#phrase-mots");
+    zone.innerHTML = "";
+    const cle = normaliser(phrase.key).split(" ");
+    phrase.en.split(/\s+/).forEach(mot => {
+      const e = document.createElement("span");
+      e.className = "etiq";
+      e.textContent = mot;
+      e.dataset.mot = normaliser(mot);
+      if(cle.includes(normaliser(mot))) e.classList.add("cle");  /* mot clé en rouge */
+      zone.appendChild(e);
+    });
+    $("#phrase-fr").textContent = phrase.fr;
+    this.coeurs("phrase", coeurs);
+    this.texteEcoute("phrase", "");
+    this.validationAdulte(!Micro.dispo || Progres.r.validationAdulte, "phrase");
+  },
+  allumerMots(hits){
+    const normalises = (hits||[]).map(normaliser);
+    $$("#phrase-mots .etiq").forEach(e => {
+      if(normalises.includes(e.dataset.mot)) e.classList.add("ok");
+    });
+  },
+
+  /* ---------- Panneau du résultat ---------- */
+  panneauResultat(r){
+    $("#resultat-titre").textContent = r.valide ? "Bravo ! 🎉" : "Bien essayé ! 💪";
+    $("#etoiles").textContent = "⭐".repeat(r.etoiles) + "☆".repeat(3 - r.etoiles);
+    $("#bulles-phrases").textContent = r.bulles ? "💬".repeat(Math.min(10, r.bulles)) : "";
+    $("#resultat-message").textContent = r.valide
+      ? `Tu as dit ${r.reussis} mots sur ${r.total} ! La porte est ouverte 🚪`
+      : `Tu as dit ${r.reussis} mots sur ${r.total}. Réécoute et recommence, tu vas y arriver !`;
+
+    const liste = $("#liste-revoir");
+    if(r.rates && r.rates.length){
+      liste.innerHTML = "<b>À réécouter :</b><br>" + r.rates.map(m =>
+        `<button class="btn blanc" style="font-size:16px;min-height:44px;margin:4px 4px 0 0"
+                 data-revoir="${m}">🔊 ${m}</button>`).join("");
+      liste.querySelectorAll("[data-revoir]").forEach(b => b.onclick = () => {
+        const z = Jeu.zone;
+        const mot = z.mots.concat(z.bonus||[]).find(x => x.en === b.dataset.revoir);
+        if(mot) Voix.direMot(mot);
+      });
+    }else liste.innerHTML = "";
+
+    $("#btn-continuer").textContent = r.valide
+      ? (r.suivante ? "➡️ Lieu suivant" : "🗺️ Carte") : "🔁 Réessayer";
+    $("#btn-continuer").dataset.suivante = r.suivante || "";
+    $("#btn-continuer").dataset.valide = r.valide ? "1" : "";
+    this.ouvrirPanneau("panneau-resultat");
+  },
+
+  /* ---------- Carte des lieux ---------- */
+  majCarte(){
+    const grille = $("#grille-lieux");
+    grille.innerHTML = "";
+    LIEUX.forEach(lieu => {
+      const zones = lieu.zones.map(zoneParId);
+      const premiereJouable = zones.find(z => Progres.estDebloque(z.id)) || null;
+      const debloque = !!premiereJouable;
+      const etoiles = zones.reduce((s,z) => s + (Progres.zone(z.id).etoiles||0), 0);
+      const maxEtoiles = zones.length * 3;
+      const bulles = zones.reduce((s,z) => s + (Progres.zone(z.id).bulles||0), 0);
+      const toutFini = zones.every(z => Progres.zone(z.id).fini);
+
+      const div = document.createElement("div");
+      div.className = "medaillon" + (debloque ? "" : " verrou");
+      div.innerHTML = MEDAILLONS[lieu.id] + `
+        <div>
+          <h3>${lieu.nom}</h3>
+          <p class="fr">${lieu.fr}${zones.length > 1 ? " · "+zones.length+" pièces" : ""}</p>
+          <p class="notes">${ maxEtoiles > 3
+              ? `⭐ ${etoiles} / ${maxEtoiles}`
+              : "⭐".repeat(etoiles) + "☆".repeat(Math.max(0, maxEtoiles-etoiles)) }${
+              bulles ? " · 💬 "+bulles : ""}</p>
+        </div>`;
+      if(debloque){
+        /* on reprend à la première pièce non terminée */
+        const cible = zones.find(z => Progres.estDebloque(z.id) && !Progres.zone(z.id).fini)
+                   || zones.filter(z => Progres.estDebloque(z.id)).pop();
+        div.onclick = () => Jeu.ouvrirZone(cible.id);
+        if(!toutFini) div.classList.add("suivant");
+      }
+      grille.appendChild(div);
+    });
+    $("#resume-progres").textContent =
+      `⭐ ${Progres.totalEtoiles()} étoiles · 💬 ${Progres.totalBulles()} phrases réussies`
+      + (Progres.donnees.motsARevoir.length ? ` · ${Progres.donnees.motsARevoir.length} mots à revoir` : "");
+  },
+
+  /* ---------- Aide ---------- */
+  aide(){
+    const tactile = Appareil.tactile;
+    $("#aide-contenu").innerHTML = tactile ? `
+      <p>🕹️ <b>Le joystick</b> en bas : pousse vers le haut pour avancer,
+         vers le bas pour reculer, sur les côtés pour tourner.</p>
+      <p>👆 <b>Glisse un doigt</b> ailleurs sur l'écran pour regarder autour de toi.</p>
+      <p>👇 <b>Touche le sol</b> : tu marches tout seul jusque là.</p>
+      <p>🔴 <b>Touche les objets entourés en rouge</b> pour entendre leur nom en anglais
+         et sa traduction.</p>
+      <p>🎤 Quand tout est trouvé, appuie sur <b>Le défi !</b></p>` : `
+      <p>⬆️ <b>Flèches</b> (ou Z/W et S) : avancer et reculer.</p>
+      <p>⬅️➡️ <b>Flèches gauche / droite</b> (ou Q/A et D) : tourner.</p>
+      <p>🖱️ <b>Clic maintenu + glisser</b> : regarder autour de toi.</p>
+      <p>🖱️ <b>Clic sur le sol</b> : tu marches jusque là.</p>
+      <p>🔴 <b>Clic sur un objet entouré en rouge</b> : tu entends son nom en anglais
+         et sa traduction.</p>
+      <p>🎤 Quand tout est trouvé, appuie sur <b>Le défi !</b></p>`;
+    this.ouvrirPanneau("panneau-aide");
+  },
+
+  /* ---------- Espace parent ---------- */
+  ouvrirParent(){
+    const a = 3 + Math.floor(Math.random()*7), b = 4 + Math.floor(Math.random()*6);
+    this._reponse = a*b;
+    $("#parent-question").textContent = `Combien font ${a} × ${b} ?`;
+    $("#parent-reponse").value = "";
+    $("#parent-verrou").style.display = "block";
+    $("#parent-contenu").style.display = "none";
+    this.ouvrirPanneau("panneau-parent");
+    setTimeout(() => $("#parent-reponse").focus(), 120);
+  },
+
+  validerParent(){
+    if(parseInt($("#parent-reponse").value,10) !== this._reponse){
+      $("#parent-question").textContent = "Ce n'est pas ça. Réessayez.";
+      $("#parent-reponse").value = "";
+      return;
+    }
+    $("#parent-verrou").style.display = "none";
+    const c = $("#parent-contenu");
+    c.style.display = "block";
+    const r = Progres.r;
+    const etatMicro = Micro.dispo ? "✅ disponible" : "❌ non géré par ce navigateur";
+    const etatVoix = Voix.voixEn ? "✅ " + Voix.voixEn.name : "❌ aucune voix anglaise trouvée";
+    const etatVoixFr = Voix.voixFr ? "✅ " + Voix.voixFr.name : "❌ aucune voix française trouvée";
+
+    c.innerHTML = `
+      <div class="reglage"><span>🔊 Volume de la voix</span>
+        <input type="range" id="r-volume" min="0" max="1" step=".1" value="${r.volumeVoix}"></div>
+      <div class="reglage"><span>🐢 Vitesse de la voix anglaise</span>
+        <input type="range" id="r-vitesse" min=".5" max="1" step=".05" value="${r.vitesseVoix}"></div>
+      <div class="reglage"><span>🗣️ Accent</span>
+        <select id="r-accent">
+          <option value="en-US"${r.accent==="en-US"?" selected":""}>Américain (US)</option>
+          <option value="en-GB"${r.accent==="en-GB"?" selected":""}>Britannique (UK)</option>
+        </select></div>
+      <div class="reglage"><span>🇫🇷 Dire la traduction française à l'oral</span>
+        <select id="r-trad">
+          <option value="1"${r.traductionOrale?" selected":""}>Oui</option>
+          <option value="0"${!r.traductionOrale?" selected":""}>Non</option>
+        </select></div>
+      <div class="reglage"><span>🦉 Lire les messages de Hoot</span>
+        <select id="r-hoot">
+          <option value="1"${r.hootVoix?" selected":""}>Oui</option>
+          <option value="0"${!r.hootVoix?" selected":""}>Non</option>
+        </select></div>
+      <div class="reglage"><span>🎯 Seuil de réussite</span>
+        <select id="r-seuil">
+          ${[50,70,90].map(s => `<option value="${s}"${r.seuil==s?" selected":""}>${s} %</option>`).join("")}
+        </select></div>
+      <div class="reglage"><span>💬 Phrases bonus</span>
+        <select id="r-phrases">
+          <option value="auto"${r.nbPhrases==="auto"?" selected":""}>Auto (2 maison / 3 dehors)</option>
+          <option value="2"${r.nbPhrases==="2"?" selected":""}>2</option>
+          <option value="3"${r.nbPhrases==="3"?" selected":""}>3</option>
+          <option value="0"${r.nbPhrases==="0"?" selected":""}>Aucune</option>
+        </select></div>
+      <div class="reglage"><span>⭐ Objets bonus en option</span>
+        <select id="r-bonus">
+          <option value="1"${r.bonusActifs?" selected":""}>Affichés</option>
+          <option value="0"${!r.bonusActifs?" selected":""}>Masqués</option>
+        </select></div>
+      <div class="reglage"><span>👂 Validation par l'adulte (sans micro)</span>
+        <select id="r-adulte">
+          <option value="0"${!r.validationAdulte?" selected":""}>Non</option>
+          <option value="1"${r.validationAdulte?" selected":""}>Oui</option>
+        </select></div>
+      <div class="reglage"><span>🎨 Qualité graphique</span>
+        <select id="r-qualite">
+          <option value="auto"${r.qualite==="auto"?" selected":""}>Auto</option>
+          <option value="haute"${r.qualite==="haute"?" selected":""}>Haute</option>
+          <option value="eco"${r.qualite==="eco"?" selected":""}>Économie</option>
+        </select></div>
+      <div class="reglage"><span>🕹️ Joystick</span>
+        <select id="r-joystick">
+          <option value="0"${!r.joystickDroite?" selected":""}>À gauche</option>
+          <option value="1"${r.joystickDroite?" selected":""}>À droite</option>
+        </select></div>
+
+      <p class="note" style="margin-top:12px">
+        <b>Mots à revoir (${Progres.donnees.motsARevoir.length}) :</b>
+        ${Progres.donnees.motsARevoir.join(", ") || "aucun 🎉"}<br>
+        <b>Phrases bonus réussies :</b> ${Progres.totalBulles()}<br>
+        <b>Micro :</b> ${etatMicro}<br>
+        <b>Voix anglaise :</b> ${etatVoix}<br>
+        <b>Voix française :</b> ${etatVoixFr}
+      </p>
+      <p class="note">
+        🔒 <b>Vie privée :</b> aucun enregistrement audio n'est conservé, ni sur l'appareil
+        ni ailleurs. Aucune publicité, aucun traceur. Attention : la reconnaissance vocale du
+        navigateur peut envoyer la voix aux serveurs de l'éditeur (Google pour Chrome,
+        Apple pour Safari) le temps de la transcription.<br>
+        🎤 Le micro ne fonctionne qu'en <b>HTTPS</b> ou sur <b>localhost</b>.
+        Navigateurs conseillés : Chrome et Edge (ordinateur, Android), Safari (iPhone, iPad).
+      </p>
+      <div class="rangee">
+        <button class="btn blanc" id="btn-tout-debloquer">🔓 Débloquer tous les lieux</button>
+        <button class="btn framboise" id="btn-reset">🗑️ Tout recommencer</button>
+      </div>
+      <div class="rangee">
+        <button class="btn menthe gros" id="btn-parent-fermer">✅ Terminé</button>
+      </div>`;
+
+    /* Branchement des réglages */
+    const lier = (id, cle, transforme) => {
+      const el = $("#"+id); if(!el) return;
+      el.onchange = el.oninput = () => {
+        Progres.r[cle] = transforme ? transforme(el.value) : el.value;
+        Progres.sauver();
+      };
+    };
+    lier("r-volume","volumeVoix",parseFloat);
+    lier("r-vitesse","vitesseVoix",parseFloat);
+    lier("r-accent","accent");
+    lier("r-trad","traductionOrale", v => v === "1");
+    lier("r-hoot","hootVoix", v => v === "1");
+    lier("r-seuil","seuil", v => parseInt(v,10));
+    lier("r-phrases","nbPhrases");
+    lier("r-bonus","bonusActifs", v => v === "1");
+    lier("r-adulte","validationAdulte", v => v === "1");
+    lier("r-qualite","qualite");
+    lier("r-joystick","joystickDroite", v => v === "1");
+    $("#r-accent").addEventListener("change", () => Voix.init());
+    $("#r-joystick").addEventListener("change", () => Controles.montrerJoystick(Appareil.tactile));
+
+    $("#btn-tout-debloquer").onclick = () => {
+      Progres.tout(); this.majCarte();
+      $("#btn-tout-debloquer").textContent = "✅ Tous les lieux sont ouverts";
+    };
+    $("#btn-reset").onclick = () => {
+      if(confirm("Effacer toute la progression ? Les réglages sont conservés.")){
+        Progres.remettreAZero(); this.majCarte();
+        this.fermerPanneau("panneau-parent");
+        Jeu.enCours = false;
+        this.montrerEcran("titre");
+      }
+    };
+    $("#btn-parent-fermer").onclick = () => {
+      this.fermerPanneau("panneau-parent");
+      if(Jeu.enCours){ Controles.activer(true); }
+    };
+  }
+};
+
+/* Médaillons dessinés des 4 lieux (SVG) */
+const MEDAILLONS = {
+  house:`<svg viewBox="0 0 120 80"><rect width="120" height="80" fill="#BFE3F7"/>
+    <rect y="54" width="120" height="26" fill="#7FC06E"/>
+    <g stroke="#3B1E54" stroke-width="3">
+      <rect x="30" y="34" width="60" height="30" fill="#FFE6C7"/>
+      <path d="M24 36 L60 12 L96 36Z" fill="#E4624B"/>
+      <rect x="40" y="42" width="16" height="14" fill="#8ED6FF"/>
+      <rect x="66" y="44" width="14" height="20" fill="#B5733F"/></g></svg>`,
+  garden:`<svg viewBox="0 0 120 80"><rect width="120" height="80" fill="#CFEAFB"/>
+    <rect y="46" width="120" height="34" fill="#6FBF63"/>
+    <g stroke="#3B1E54" stroke-width="3">
+      <rect x="34" y="40" width="8" height="26" fill="#8C5A2B"/>
+      <circle cx="38" cy="32" r="18" fill="#54B265"/>
+      <circle cx="80" cy="60" r="7" fill="#FF5D73"/>
+      <circle cx="96" cy="56" r="6" fill="#FFC93C"/>
+      <path d="M62 66 q10 -14 20 0" fill="none"/></g></svg>`,
+  street:`<svg viewBox="0 0 120 80"><rect width="120" height="80" fill="#CFE2F2"/>
+    <rect y="52" width="120" height="28" fill="#5B5862"/>
+    <rect y="64" width="120" height="3" fill="#FFF" opacity=".8"/>
+    <g stroke="#3B1E54" stroke-width="3">
+      <rect x="8" y="16" width="34" height="38" fill="#E8E2F2"/>
+      <rect x="14" y="22" width="9" height="9" fill="#8ED6FF"/>
+      <rect x="28" y="22" width="9" height="9" fill="#8ED6FF"/>
+      <rect x="58" y="34" width="44" height="20" rx="5" fill="#FFC93C"/>
+      <circle cx="70" cy="56" r="6" fill="#2A2A30"/>
+      <circle cx="94" cy="56" r="6" fill="#2A2A30"/></g></svg>`,
+  park:`<svg viewBox="0 0 120 80"><rect width="120" height="80" fill="#FFE2BC"/>
+    <rect y="48" width="120" height="32" fill="#8ACF78"/>
+    <g stroke="#3B1E54" stroke-width="3">
+      <ellipse cx="86" cy="64" rx="26" ry="10" fill="#6CC5E8"/>
+      <path d="M18 66 L48 40 L54 46 L26 70Z" fill="#FF9F45"/>
+      <path d="M48 40 v-10" fill="none"/>
+      <path d="M64 30 l10 -14 l10 14 l-10 6Z" fill="#FF5D73"/></g></svg>`
+};
+
+/* ===================================================================
+   J. BRANCHEMENT DES BOUTONS ET DÉMARRAGE
+   =================================================================== */
+function brancherInterface(){
+  /* --- Écran titre --- */
+  $("#btn-jouer").onclick = async () => {
+    Voix.debloquer();                       /* débloque l'audio (iPhone) */
+    UI.montrerEcran("carte");
+    UI.majCarte();
+  };
+  $("#btn-parent-titre").onclick = () => UI.ouvrirParent();
+  $("#btn-parent-carte").onclick = () => UI.ouvrirParent();
+  $("#btn-parent-jeu").onclick = () => UI.ouvrirParent();
+  $("#btn-retour-titre").onclick = () => UI.montrerEcran("titre");
+
+  /* Plein écran (Android ; impossible sur iPhone pour une page web) */
+  const btnPlein = $("#btn-plein-ecran");
+  if(document.documentElement.requestFullscreen && !Appareil.iOS){
+    btnPlein.style.display = "inline-flex";
+    btnPlein.onclick = () => {
+      if(document.fullscreenElement) document.exitFullscreen();
+      else document.documentElement.requestFullscreen().catch(()=>{});
+    };
+  }
+
+  /* --- En jeu --- */
+  $("#btn-carte").onclick = () => Jeu.quitter();
+  $("#btn-aide").onclick = () => UI.aide();
+  $("#btn-fermer-aide").onclick = () => {
+    UI.fermerPanneau("panneau-aide");
+    if(Jeu.enCours) Controles.activer(true);
+  };
+  $("#btn-defi").onclick = () => Jeu.lancerDefi();
+  $("#btn-reecouter-mot").onclick = () => UI.motAffiche && Voix.direMot(UI.motAffiche);
+  $("#btn-fermer-mot").onclick = () => UI.fermerCarteMot();
+
+  /* --- Défi : les mots --- */
+  $("#micro").onclick = () => Jeu.ecouterMot();
+  $("#btn-defi-reecouter").onclick = () => Jeu.motActuel && Voix.direMot(Jeu.motActuel);
+  $("#btn-defi-quitter").onclick = () => {
+    Micro.arreter(); Voix.arreter();
+    UI.fermerPanneau("panneau-defi");
+    if(Jeu.enCours) Controles.activer(true);
+  };
+  $("#btn-adulte-ok").onclick = () => Jeu.jugerMot(true, "");
+  $("#btn-adulte-non").onclick = () => Jeu.jugerMot(false, "");
+
+  /* --- Défi : les phrases --- */
+  $("#micro-phrase").onclick = () => Jeu.ecouterPhrase();
+  $("#btn-phrase-reecouter").onclick = () => {
+    const f = Jeu.phrases;
+    if(f && f.liste[f.index]) Voix.direPhrase(f.liste[f.index]);
+  };
+  $("#btn-phrase-passer").onclick = () => Jeu.passerLesPhrases();
+  $("#btn-adulte-phrase-ok").onclick = () => Jeu.jugerPhrase(true, "");
+  $("#btn-adulte-phrase-non").onclick = () => Jeu.jugerPhrase(false, "");
+
+  /* --- Résultat --- */
+  $("#btn-continuer").onclick = () => {
+    const b = $("#btn-continuer");
+    UI.fermerPanneau("panneau-resultat");
+    if(!b.dataset.valide){                        /* échec : on réessaie */
+      Controles.activer(true);
+      UI.hoot("Réécoute les objets, puis retente le défi 🎤", true);
+      Jeu.verifierDefi();
+      return;
+    }
+    if(b.dataset.suivante) Jeu.ouvrirZone(b.dataset.suivante);
+    else { Jeu.enCours = false; UI.montrerEcran("carte"); UI.majCarte(); }
+  };
+  $("#btn-resultat-carte").onclick = () => {
+    UI.fermerPanneau("panneau-resultat"); Jeu.quitter();
+  };
+
+  /* --- Espace parent --- */
+  $("#btn-parent-valider").onclick = () => UI.validerParent();
+  $("#parent-reponse").addEventListener("keydown", e => {
+    if(e.key === "Enter") UI.validerParent();
+  });
+  $("#btn-parent-annuler").onclick = () => {
+    UI.fermerPanneau("panneau-parent");
+    if(Jeu.enCours) Controles.activer(true);
+  };
+
+  /* Rotation de l'écran : on recalcule tout */
+  window.addEventListener("orientationchange", () => {
+    setTimeout(() => {
+      if(Monde.engine){ Monde.engine.resize(); Monde.adapterChampDeVision(); }
+    }, 300);
+  });
+}
+
+/* ---------- Démarrage ---------- */
+async function demarrer(){
+  if(typeof BABYLON === "undefined"){
+    UI.chargement(true, "Babylon.js n'a pas pu être chargé.");
+    $("#texte-chargement").innerHTML =
+      "⚠️ Le moteur 3D n'a pas pu être téléchargé.<br>Vérifiez la connexion internet " +
+      "au premier lancement, puis rechargez la page.";
+    return;
+  }
+
+  /* Le prénom de l'enfant vient de l'adresse (?pour=…), jamais du code :
+     ainsi la page publique ne contient aucun prénom. */
+  try{
+    const pour = new URLSearchParams(location.search).get("pour");
+    if(pour){
+      const credit = $("#credit-mealua");
+      credit.textContent = "created for ";
+      const nom = document.createElement("b");
+      nom.textContent = pour.slice(0, 40);     /* textContent : aucun risque d'injection */
+      credit.appendChild(nom);
+    }
+  }catch(e){}
+
+  UI.chargement(true, "Préparation du monde…");
+  UI.progres(.1);
+  Voix.init();
+  brancherInterface();
+  Controles.init();
+  UI.progres(.35);
+
+  try{
+    Monde.demarrer(document.getElementById("vue3d"));
+  }catch(e){
+    $("#texte-chargement").innerHTML =
+      "⚠️ La 3D n'a pas pu démarrer sur cet appareil.<br>" + e.message;
+    return;
+  }
+
+  /* On pré-calcule les textures une seule fois, avec la barre de progression */
+  const aPreparer = ["parquet","parquetFonce","carrelage","damier","papierEtoile",
+    "carreauMetro","creditCuisine","lambris","brique","bardage","tuile","bitume",
+    "pave","herbe","gravier","terre","bois","boisClair","ecorce","feuillage",
+    "tissu","fourrure","metal","eau","vitrine"];
+  Tex.ouvrirAtelier(Monde.engine);
+  Tex.init(null, Qualite.niveau());
+  for(let i=0;i<aPreparer.length;i++){
+    Tex.get(aPreparer[i]);
+    UI.progres(.35 + .6 * (i+1)/aPreparer.length);
+    if(i % 5 === 0) await pause(0);        /* laisse respirer l'affichage */
+  }
+  UI.progres(1);
+  await pause(120);
+
+  UI.chargement(false);
+  UI.montrerEcran("titre");
+  UI.majCarte();
+}
+
+window.addEventListener("DOMContentLoaded", demarrer);
+</script>
+</body>
+</html>
