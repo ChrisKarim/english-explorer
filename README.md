@@ -3,7 +3,21 @@
 Jeu éducatif en 3D pour apprendre l'anglais en explorant. Conçu pour un enfant
 francophone de 7 ans, jouable sur **ordinateur, iPhone et Android**.
 
-*created for Méalua*
+---
+
+## 0. Personnaliser le message d'accueil
+
+Par défaut, l'accueil affiche *« created with ❤️ »*. Pour y mettre le prénom de
+l'enfant, ajoutez `?pour=` à la fin de l'adresse :
+
+```
+https://…/index.html?pour=Méalua      →  created for Méalua
+```
+
+Le prénom n'est **jamais écrit dans le code** : il vit uniquement dans votre lien.
+C'est volontaire — si le jeu est hébergé sur une page publique, aucun prénom
+d'enfant n'y est exposé ni indexable par les moteurs de recherche. Mettez votre
+lien personnalisé en favori ou sur l'écran d'accueil du téléphone.
 
 ---
 
