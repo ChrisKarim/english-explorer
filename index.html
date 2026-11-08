@@ -272,6 +272,8 @@ body.touch.joy-right #btn-challenge{right:auto;left:calc(var(--pad-l) + 16px)}
 .switch.on{background:var(--mint)} .switch.on::after{left:27px}
 .note{font-size:.95rem;background:var(--sky2);border-radius:14px;padding:10px 12px;margin-top:10px;line-height:1.4}
 #gate-input{font-family:inherit;font-size:1.6rem;width:130px;text-align:center;border:4px solid var(--ink);border-radius:14px;padding:6px}
+.setting select{font-family:inherit;font-size:.98rem;padding:6px 8px;border:3px solid var(--ink);border-radius:12px;
+  background:var(--paper);color:var(--on-paper);max-width:58%}
 
 /* Chargement, aide, confettis */
 #loading{background:linear-gradient(#8ED8FF,#D4F1FF)}
@@ -383,8 +385,8 @@ html,body{color:var(--on-paper)}
     <button class="btn" id="btn-play" style="font-size:1.7rem">▶ Jouer</button>
   </div>
   <div class="corner bl">v2.1</div>
-  <!-- Le prénom peut aussi être changé par l'adresse : …/index.html?pour=Prénom -->
-  <div id="credit">created for <b>Méalua</b></div>
+  <!-- On peut dédier le jeu à quelqu'un par l'adresse : …/index.html?pour=Prénom -->
+  <div id="credit">created by <b>CKN</b></div>
 </section>
 
 <!-- CARTE DES LIEUX -->
@@ -518,7 +520,7 @@ const PI = Math.PI;
    --------------------------------------------------------------------- */
 const STORE_KEY = "englishExplorer.v2", OLD_KEY = "englishExplorer.v1";
 const DEFAULT_SETTINGS = { voiceVol: 1, fxVol: 0.7, rate: 0.8, threshold: 0.7, accent: "en-US", hootVoice: true, parentMode: false,
-  sentences: "auto", quality: "auto", joySide: "left", translate: true };
+  sentences: "auto", quality: "auto", joySide: "left", translate: true, voiceEn: "", voiceFr: "" };
 function freshSave() { return { unlocked: 1, zones: {}, review: [], settings: { ...DEFAULT_SETTINGS }, seenHelp: false, done: {} }; }
 function loadSave() {
   try {
@@ -566,6 +568,7 @@ const Fx = {
       if (!this.ctx) { const AC = window.AudioContext || window.webkitAudioContext; if (AC) this.ctx = new AC(); }
       if (this.ctx && this.ctx.state === "suspended") this.ctx.resume();
     } catch (e) { this.ctx = null; }
+    try { Speaker.warm(); } catch (e) {}
   },
   tone(freq, dur, { type = "sine", vol = 0.25, when = 0, to = null } = {}) {
     const c = this.ctx; if (!c) return;
@@ -591,18 +594,52 @@ const Fx = {
    (ex. audio/teddy-bear.mp3) à côté de ce fichier HTML.
    --------------------------------------------------------------------- */
 const Speaker = {
-  voices: [], mp3: {}, current: null,
+  voices: [], mp3: {}, current: null, warmed: false,
   init() {
     if (!("speechSynthesis" in window)) return;
-    const load = () => { try { this.voices = window.speechSynthesis.getVoices() || []; } catch (e) { this.voices = []; } };
-    load();
-    try { window.speechSynthesis.addEventListener("voiceschanged", load); } catch (e) { window.speechSynthesis.onvoiceschanged = load; }
+    this.refresh();
+    try { window.speechSynthesis.addEventListener("voiceschanged", () => this.refresh()); }
+    catch (e) { window.speechSynthesis.onvoiceschanged = () => this.refresh(); }
+    /* Safari et iOS remplissent la liste des voix en retard : on réessaie. */
+    [200, 700, 1800, 4000].forEach((d) => setTimeout(() => this.refresh(), d));
+  },
+  refresh() { try { const v = window.speechSynthesis.getVoices(); if (v && v.length) this.voices = v; } catch (e) {} },
+  /* Sur iPhone, la synthèse vocale doit être « réveillée » par un geste. */
+  warm() {
+    if (this.warmed || !("speechSynthesis" in window)) return;
+    this.warmed = true;
+    try { const u = new SpeechSynthesisUtterance(" "); u.volume = 0; window.speechSynthesis.speak(u); } catch (e) {}
+    this.refresh();
+  },
+  /* Liste des voix d'une langue, de la plus agréable à la moins agréable.
+     On ne garde QUE les voix de la bonne langue : jamais d'anglais lu par
+     une voix française. */
+  voicesFor(lang) {
+    if (!this.voices.length) this.refresh();
+    const L = lang.toLowerCase(), two = L.slice(0, 2);
+    const norm = (x) => (x.lang || "").replace("_", "-").toLowerCase();
+    const bad = /compact|eloquence|novelty|whisper|bells|bad news|good news|organ|cellos|zarvox|trinoids|boing|bubbles|jester|superstar|wobble|bahh|deranged|hysterical|pipe/i;
+    const great = /premium|enhanced|neural|natural|siri|multilingual/i;
+    const known = /google|samantha|ava|allison|serena|daniel|karen|aria|jenny|libby|sonia|nathan|guy|amelie|amélie|audrey|thomas|marie|denise|henri/i;
+    const score = (x) => {
+      let s = 0;
+      if (norm(x) === L) s += 40;              // bon pays (en-US / en-GB)
+      if (great.test(x.name)) s += 30;         // voix « améliorée » : la plus fluide
+      if (/google/i.test(x.name)) s += 18;     // voix Google : très naturelles
+      if (known.test(x.name)) s += 10;
+      if (bad.test(x.name)) s -= 80;           // voix robotiques ou fantaisistes
+      if (x.localService) s += 3;
+      if (x.default) s += 2;
+      return s;
+    };
+    return this.voices.filter((x) => norm(x).startsWith(two)).sort((a, b) => score(b) - score(a));
   },
   pick(lang) {
-    const v = this.voices, L = lang.toLowerCase();
-    const norm = (x) => (x.lang || "").replace("_", "-").toLowerCase();
-    const nice = /google|samantha|daniel|karen|serena|aria|jenny|libby|sonia|natural|amélie|thomas|audrey|siri/i;
-    return v.find((x) => norm(x) === L && nice.test(x.name)) || v.find((x) => norm(x) === L) || v.find((x) => norm(x).startsWith(L.slice(0, 2))) || null;
+    const list = this.voicesFor(lang);
+    if (!list.length) return null;
+    const want = save.settings[lang.toLowerCase().startsWith("fr") ? "voiceFr" : "voiceEn"];
+    if (want) { const exact = list.find((x) => x.name === want) || this.voices.find((x) => x.name === want); if (exact) return exact; }
+    return list[0];
   },
   hasEnglish() { return !!this.pick(save.settings.accent); },
   stop() {
@@ -614,8 +651,13 @@ const Speaker = {
       if (!("speechSynthesis" in window)) return resolve(false);
       try {
         const u = new SpeechSynthesisUtterance(text);
-        u.lang = lang; u.rate = rate; u.pitch = 1.05; u.volume = save.settings.voiceVol;
-        const voice = this.pick(lang); if (voice) u.voice = voice;
+        const voice = this.pick(lang);
+        /* On impose la voix ET sa langue : sans cela, le navigateur lit
+           l'anglais avec la voix par défaut du système (souvent française).
+           Si la voix ne peut pas être appliquée, on parle quand même. */
+        u.lang = lang;
+        if (voice) { try { u.voice = voice; u.lang = voice.lang || lang; } catch (e) { u.lang = lang; } }
+        u.rate = rate; u.pitch = 1.0; u.volume = save.settings.voiceVol;
         const t = setTimeout(() => resolve(true), 900 + text.length * 160 / rate);
         u.onend = () => { clearTimeout(t); resolve(true); };
         u.onerror = () => { clearTimeout(t); resolve(false); };
@@ -3287,13 +3329,23 @@ function tryGate() {
   if (parseInt($("#gate-input").value, 10) === gateAnswer) { $("#parent-gate").classList.add("hidden"); openParent(); }
   else { $("#gate-msg").textContent = "Ce n'est pas la bonne réponse."; Fx.soft(); }
 }
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+/* Menu de choix de la voix : les plus fluides (Premium, Enhanced, Google…)
+   sont classées en premier par Speaker.voicesFor(). */
+function voiceSelect(key, lang) {
+  const list = Speaker.voicesFor(lang), cur = save.settings[key] || "";
+  if (!list.length) return '<i style="opacity:.65">aucune voix installée</i>';
+  const opts = list.map((v) => `<option value="${esc(v.name)}"${v.name === cur ? " selected" : ""}>${esc(v.name)} · ${esc(v.lang)}</option>`).join("");
+  return `<select data-voice="${key}"><option value=""${cur ? "" : " selected"}>Automatique (${esc(list[0].name)})</option>${opts}</select>`;
+}
 function seg(key, options) {
   return `<div class="seg" data-key="${key}">${options.map(([v, lbl]) => `<button data-v="${v}" class="${String(save.settings[key]) === String(v) ? "on" : ""}">${lbl}</button>`).join("")}</div>`;
 }
 function openParent() {
+  Speaker.refresh();
   const s = save.settings;
   const srOk = Recognizer.supported && !Recognizer.blocked;
-  const enVoice = Speaker.hasEnglish();
+  const enVoice = Speaker.pick(s.accent);
   const totalSent = LEVELS.reduce((a, L) => a + levelSent(L), 0);
   $("#parent-panel").innerHTML = `
     <h2>⚙️ Espace parent</h2>
@@ -3302,9 +3354,20 @@ function openParent() {
     <div class="setting">Volume des effets<input type="range" min="0" max="1" step="0.1" value="${s.fxVol}" data-key="fxVol"></div>
     <div class="setting">Vitesse de la voix anglaise<input type="range" min="0.6" max="1.1" step="0.05" value="${s.rate}" data-key="rate"></div>
     <div class="setting">Accent anglais ${seg("accent", [["en-US", "🇺🇸 US"], ["en-GB", "🇬🇧 UK"]])}</div>
+    <div class="setting">Voix anglaise ${voiceSelect("voiceEn", s.accent)}</div>
+    <div class="setting">Voix française ${voiceSelect("voiceFr", "fr-FR")}</div>
     <div class="setting">Hoot lit ses messages à voix haute<button class="switch ${s.hootVoice ? "on" : ""}" data-switch="hootVoice" aria-label="Voix de Hoot"></button></div>
     <div class="setting">Dire la traduction française après l'anglais<button class="switch ${s.translate ? "on" : ""}" data-switch="translate" aria-label="Traduction orale"></button></div>
-    <div class="row" style="justify-content:flex-start;margin-top:10px"><button class="btn small" id="p-test">🔊 Tester la voix anglaise</button></div>
+    <div class="row" style="justify-content:flex-start;margin-top:10px">
+      <button class="btn small" id="p-test">🔊 Tester l'anglais</button>
+      <button class="btn small white" id="p-test-fr">🔊 Tester le français</button>
+    </div>
+    <div class="note">
+      <b>Pour une voix vraiment fluide</b>, installez une voix « améliorée » dans l'appareil, puis choisissez-la ci-dessus :<br>
+      • <b>iPhone / iPad</b> : Réglages → Accessibilité → Contenu énoncé → Voix → English → téléchargez une voix <i>Premium</i> (Ava, Evan, Zoe…).<br>
+      • <b>Android</b> : Paramètres → Système → Langues → Synthèse vocale → moteur Google → installer les données vocales anglaises.<br>
+      • <b>Ordinateur</b> : dans Chrome, les voix « Google US English » sont les plus naturelles.
+    </div>
     <h3>Défi de prononciation</h3>
     <div class="setting">Mots à réussir pour ouvrir la porte ${seg("threshold", [[0.5, "50 %"], [0.7, "70 %"], [0.9, "90 %"]])}</div>
     <div class="setting">Phrases bonus après les mots ${seg("sentences", [["auto", "Auto"], [2, "2"], [3, "3"], [0, "Aucune"]])}</div>
@@ -3312,7 +3375,7 @@ function openParent() {
     <div class="note">
       « Auto » = 2 phrases par pièce de la maison, 3 dans les autres lieux. Les phrases ne bloquent jamais la porte : elles rapportent des bulles 💬 bonus.<br>
       Reconnaissance vocale : <b>${srOk ? "disponible ✅" : "indisponible ici → l'adulte valide à l'oreille"}</b><br>
-      Voix anglaise : <b>${enVoice ? "trouvée ✅" : "introuvable — installez une voix anglaise dans les réglages de l'appareil"}</b><br>
+      Voix anglaise utilisée : <b>${enVoice ? esc(enVoice.name) + " (" + esc(enVoice.lang) + ")" : "aucune — l'anglais serait lu avec la voix française de l'appareil"}</b><br>
       Conseil : utilisez Chrome ou Edge (ordinateur, Android) ou Safari (iPhone, iPad). Le micro demande une page en HTTPS ou ouverte en local.
     </div>
     <h3>Écran et contrôles</h3>
@@ -3336,9 +3399,16 @@ function openParent() {
     const v = b.dataset.v; save.settings[g.dataset.key] = isNaN(parseFloat(v)) ? v : parseFloat(v); persist();
     g.querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b)); Fx.click();
     if (g.dataset.key === "joySide") document.body.classList.toggle("joy-right", save.settings.joySide === "right");
+    if (g.dataset.key === "accent") { save.settings.voiceEn = ""; persist(); openParent(); }
   })));
   P.querySelectorAll("[data-switch]").forEach((b) => (b.onclick = () => { const k = b.dataset.switch; save.settings[k] = !save.settings[k]; b.classList.toggle("on", save.settings[k]); persist(); Fx.click(); }));
+  P.querySelectorAll("[data-voice]").forEach((sel) => (sel.onchange = () => {
+    Fx.unlock(); save.settings[sel.dataset.voice] = sel.value; persist();
+    if (sel.dataset.voice === "voiceEn") Speaker.praise("Hello! I love my teddy bear.");
+    else Speaker.frSay("Voici la voix française.");
+  }));
   $("#p-test").onclick = () => { Fx.unlock(); Speaker.praise("Hello! Welcome to English Explorer. I love my teddy bear."); };
+  $("#p-test-fr").onclick = () => { Fx.unlock(); Speaker.frSay("Bonjour ! Voici la voix qui dit les traductions."); };
   $("#p-unlock").onclick = () => { save.unlocked = LEVELS.length; persist(); renderMap(); $("#p-unlock").textContent = "✅ Tous les lieux sont ouverts"; };
   let armed = false;
   $("#p-reset").onclick = () => {
@@ -3388,6 +3458,7 @@ function boot() {
   document.addEventListener("click", (e) => { const b = e.target.closest("[data-say]"); if (b) { Fx.unlock(); Speaker.sayWord(WORDS[b.dataset.say] || { w: b.dataset.say }); } });
   showScreen("title");
   // point d'accès pour les tests automatiques
+  window.__openParent = openParent;
   window.__EE = { Game, LEVELS, loadLevel, interact, openChallenge, wordSuccess, wordFail, sentSuccess, sentFail, CH, save: () => save, THUMBS, goMap, matchesWord, matchesSentence, Joy, setTouchMode, renderMap };
 }
 boot();

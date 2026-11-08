@@ -3,7 +3,7 @@
 Jeu éducatif en 3D pour apprendre l'anglais en explorant. Conçu pour un enfant
 francophone de 7 ans, jouable sur **ordinateur, iPhone et Android**.
 
-*created for Méalua*
+*created by CKN*
 
 ---
 
@@ -44,14 +44,17 @@ Ouvrez l'adresse sur l'iPhone (Safari) ou Android (Chrome), puis
 > Au premier lancement, une connexion internet est nécessaire : le moteur 3D
 > (Babylon.js) et la police sont téléchargés depuis un CDN, puis mis en cache.
 
-### Personnaliser le prénom affiché
+### Dédier le jeu à quelqu'un
 
-L'accueil affiche *« created for Méalua »*. Pour mettre un autre prénom, ajoutez
-`?pour=` à la fin de l'adresse :
+L'accueil affiche *« created by CKN »*. Pour le dédier à un enfant, ajoutez `?pour=`
+à la fin de l'adresse :
 
 ```
 https://…/index.html?pour=Léo      →  created for Léo
 ```
+
+Le prénom n'est alors écrit nulle part dans le code : il vit uniquement dans votre
+lien, qu'on peut mettre en favori ou sur l'écran d'accueil du téléphone.
 
 ---
 
@@ -176,7 +179,38 @@ est centré en x/z, posé sur y = 0, et regarde vers −z.
 
 ---
 
-## 6. Améliorer les voix (facultatif)
+## 6. La voix anglaise
+
+### Choisir la voix
+Espace parent → **Voix anglaise** et **Voix française**. Le menu liste toutes les voix
+installées sur l'appareil, **les plus naturelles en premier** (Premium, Enhanced,
+Neural, Google…). Deux boutons permettent de les essayer avant de choisir.
+
+Le jeu impose toujours une voix de la bonne langue. Si aucune voix anglaise n'est
+installée, l'espace parent le signale clairement : sans cela, le navigateur lirait
+l'anglais avec la voix française de l'appareil, d'où un fort accent.
+
+### Obtenir une voix vraiment fluide (gratuit)
+Les voix livrées par défaut sont les plus robotiques. Les voix « améliorées » sont
+beaucoup plus naturelles et se téléchargent gratuitement :
+
+- **iPhone / iPad** : Réglages → Accessibilité → Contenu énoncé → Voix → English →
+  choisir une voix **Premium** (Ava, Evan, Zoe, Serena…) et la télécharger.
+- **Android** : Paramètres → Système → Langues et saisie → Synthèse vocale →
+  moteur Google → Installer les données vocales → English.
+- **Ordinateur** : dans Chrome, les voix **Google US English / Google UK English**
+  sont les plus naturelles et ne demandent aucune installation.
+
+Puis revenez dans l'espace parent choisir la nouvelle voix.
+
+### Aller plus loin : une voix de type assistant IA
+Les voix très fluides des assistants (Claude, ChatGPT…) sont des voix *neuronales*
+servies par une API payante : elles ne peuvent pas tourner dans une page web seule,
+et une clé d'API ne doit jamais être mise dans une page publique.
+
+La solution, si la voix du navigateur ne suffit pas : **pré-enregistrer les mots et les
+phrases en mp3** avec le service de votre choix, puis les déposer dans un dossier
+`audio/`. Le jeu les utilise automatiquement. Il y a 70 mots et 49 phrases à générer.
 
 Créez un dossier `audio/` à côté de `index.html` avec des `.mp3` nommés d'après le mot
 ou la phrase, en minuscules et avec des tirets :
@@ -187,7 +221,8 @@ audio/i-love-my-teddy-bear.mp3
 ```
 
 Le jeu les utilise automatiquement à la place de la voix de synthèse. Si le fichier
-n'existe pas, la voix du navigateur prend le relais : rien ne casse.
+n'existe pas, la voix du navigateur prend le relais : rien ne casse. La traduction
+française, elle, reste dite par la voix de synthèse.
 
 Les **textures** (parquet, carrelage, briques, herbe, fourrure, eau…) et tous les
 **modèles 3D** sont générés par le code. Aucun fichier à télécharger.
@@ -236,7 +271,8 @@ images par seconde chutent. Le parent peut forcer « Haute » ou « Économie »
 | Bloqué sur « Hoot prépare le décor… » | Pas de connexion au premier lancement : le moteur 3D n'a pas pu être téléchargé. Reconnectez-vous et rechargez. |
 | Aucun son | Appuyez bien sur ▶️ **Jouer** : ce premier appui débloque l'audio (obligatoire sur iPhone). |
 | Le micro ne réagit pas | Vous êtes en `file://`. Utilisez `localhost` ou une adresse HTTPS (voir §1). |
-| Pas de voix anglaise | L'espace parent affiche l'état exact. Sur Android, installez une voix anglaise dans les réglages du système. |
+| L'anglais est prononcé avec l'accent français | Aucune voix anglaise n'est installée sur l'appareil : le navigateur se rabat sur la voix française. Voir §6 pour en installer une, puis choisissez-la dans l'espace parent. |
+| La voix est robotique | Installez une voix « améliorée » (§6), puis sélectionnez-la dans l'espace parent. |
 | Ça rame | Espace parent → Qualité graphique → **Économie**. |
 | L'enfant est bloqué sur un mot | Espace parent → seuil à **50 %**, ou validation par l'adulte. |
 | Les objets apparaissent avec leur emoji et non une photo | Les miniatures 3D n'ont pas pu être calculées sur cet appareil. Sans conséquence sur le jeu. |
